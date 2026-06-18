@@ -773,19 +773,17 @@ async function play(track,q,idx){
   let streamUrl='';
 
   try{
-    // Use /api/stream — backend handles yt-dlp + cookies, falls back to archive
+    // Get direct stream URL from yt-dlp backend
     const params=new URLSearchParams({
       title:track.title||'',
       artist:track.artist||''
     });
     const r=await fetch(`${API}/stream/${track.videoId}?${params}`);
     const d=await r.json();
-    if(d.url){
-      // Stream directly from source URL via proxy to avoid CORS
-      streamUrl=`${API}/proxy/${track.videoId}`;
-    }
+    // Use direct URL — googlevideo.com blocks server proxy, must play direct
+    if(d.url) streamUrl=d.url;
   }catch(e){
-    log&&console.error('Stream fetch error:',e);
+    console.error('Stream fetch error:',e);
   }
 
   if(!streamUrl){toast('❌ Song not available');updateBtn(false);return;}
