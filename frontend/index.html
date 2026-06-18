@@ -769,23 +769,27 @@ async function play(track,q,idx){
   updateUI(track);
   document.getElementById('mini').classList.add('show');
   toast('⏳ Loading...');
-  
+
   let streamUrl='';
-  
-  // If it's a YouTube ID (11 chars), search Archive for same song
-  if(/^[a-zA-Z0-9_-]{11}$/.test(track.videoId)){
-    try{
-      const q2=`${track.title} ${track.artist}`.replace(/official|video|music|vevo/gi,'').trim();
-      const r=await fetch(`${API}/archive-search?q=${encodeURIComponent(q2)}`);
-      const d=await r.json();
-      if(d.url) streamUrl=`${API}/proxy/${d.track.videoId}`;
-    }catch(e){}
-  } else {
-    streamUrl=`${API}/proxy/${track.videoId}`;
+
+  try{
+    // Use /api/stream — backend handles yt-dlp + cookies, falls back to archive
+    const params=new URLSearchParams({
+      title:track.title||'',
+      artist:track.artist||''
+    });
+    const r=await fetch(`${API}/stream/${track.videoId}?${params}`);
+    const d=await r.json();
+    if(d.url){
+      // Stream directly from source URL via proxy to avoid CORS
+      streamUrl=`${API}/proxy/${track.videoId}`;
+    }
+  }catch(e){
+    log&&console.error('Stream fetch error:',e);
   }
-  
-  if(!streamUrl){toast('❌ Song not available on Archive');updateBtn(false);return;}
-  
+
+  if(!streamUrl){toast('❌ Song not available');updateBtn(false);return;}
+
   audio.src=streamUrl;
   audio.load();
   try{
@@ -794,7 +798,7 @@ async function play(track,q,idx){
     document.getElementById('fpArt').classList.add('playing');
     addHist(track);setMS(track);
     setTimeout(()=>toast(''),1000);
-  }catch(e){toast('❌ Failed to play');updateBtn(false);}
+  }catch(e){toast('❌ Playback failed');updateBtn(false);}
 }
 function updateUI(t){
   const th=t.thumbnail||'icons/icon-192.png',ti=t.title||'Unknown',ar=t.artist||'Unknown';

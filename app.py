@@ -1,4 +1,4 @@
-import os,json,hashlib,re,logging
+import os,json,hashlib,re,logging,subprocess,tempfile
 from pathlib import Path
 from datetime import datetime,timedelta
 from flask import Flask,request,jsonify,send_file,Response,stream_with_context
@@ -15,6 +15,25 @@ YT_KEY=os.getenv('YOUTUBE_API_KEY','')
 CACHE_DIR.mkdir(parents=True,exist_ok=True)
 _cache={}
 
+# --- Cookies setup ---
+# Cookies can be set via YOUTUBE_COOKIES_B64 env var (base64 of cookies.txt)
+# or by placing cookies.txt in the project root
+COOKIES_FILE=Path(os.getenv('COOKIES_PATH','cookies.txt'))
+
+def ensure_cookies():
+    """Load cookies from env var if file doesn't exist"""
+    b64=os.getenv('YOUTUBE_COOKIES_B64','')
+    if b64 and not COOKIES_FILE.exists():
+        import base64
+        try:
+            COOKIES_FILE.write_bytes(base64.b64decode(b64))
+            log.info('Cookies loaded from env var')
+        except Exception as e:
+            log.error(f'Cookie decode error: {e}')
+    return COOKIES_FILE.exists()
+
+ensure_cookies()
+
 def cg(k):
     if k in _cache:
         d,e=_cache[k]
@@ -24,64 +43,80 @@ def cg(k):
 def cs(k,d,m=30):
     _cache[k]=(d,datetime.now()+timedelta(minutes=m))
 
+# --- yt-dlp stream extraction ---
+def get_yt_stream(video_id):
+    """Use yt-dlp with cookies to get direct audio stream URL"""
+    k=f'yt:{video_id}'
+    c=cg(k)
+    if c: return c
+    url=f'https://www.youtube.com/watch?v={video_id}'
+    cmd=[
+        'yt-dlp',
+        '--no-playlist',
+        '-f','bestaudio[ext=m4a]/bestaudio/best',
+        '--get-url',
+        '--no-warnings',
+        '--quiet',
+    ]
+    if COOKIES_FILE.exists():
+        cmd+=['--cookies',str(COOKIES_FILE)]
+    cmd.append(url)
+    try:
+        result=subprocess.run(cmd,capture_output=True,text=True,timeout=30)
+        stream_url=result.stdout.strip().split('\n')[0]
+        if stream_url and stream_url.startswith('http'):
+            cs(k,stream_url,55)  # cache ~55min (YT URLs expire ~6h but refresh often)
+            log.info(f'yt-dlp OK: {video_id}')
+            return stream_url
+        else:
+            log.error(f'yt-dlp no URL for {video_id}: {result.stderr[:200]}')
+    except subprocess.TimeoutExpired:
+        log.error(f'yt-dlp timeout: {video_id}')
+    except Exception as e:
+        log.error(f'yt-dlp error: {e}')
+    return ''
+
+# --- Archive.org fallback ---
 def search_archive(q,n=10):
     try:
-        # Add subject:music to filter out radio/podcasts
         r=requests.get('https://archive.org/advancedsearch.php',params={
-            'q':f'({q}) AND mediatype:audio AND subject:music NOT subject:radio NOT subject:podcast NOT subject:"voice of america" NOT subject:news',
-            'output':'json',
-            'rows':n*2,  # get more to filter
-            'fl':'identifier,title,creator,subject,description',
+            'q':f'({q}) AND mediatype:audio AND subject:music NOT subject:radio NOT subject:podcast',
+            'output':'json','rows':n*2,
+            'fl':'identifier,title,creator',
             'sort':'downloads desc',
         },timeout=10)
         docs=r.json().get('response',{}).get('docs',[])
         tracks=[]
-        # Filter out radio/news/podcast items
-        skip_words=['radio','podcast','news','broadcast','voa','voice of america','lecture','speech','talk']
+        skip=['radio','podcast','news','broadcast','lecture','speech']
         for doc in docs:
             iid=doc.get('identifier','')
             title=doc.get('title','Unknown')
-            if not iid: continue
-            # Skip if title contains radio/news words
-            title_lower=title.lower()
-            if any(w in title_lower for w in skip_words): continue
+            if not iid or any(w in title.lower() for w in skip): continue
             ar=doc.get('creator','Unknown')
             if isinstance(ar,list): ar=ar[0]
-            tracks.append({
-                'videoId':iid,
-                'title':title,
-                'artist':str(ar),
+            tracks.append({'videoId':iid,'title':title,'artist':str(ar),
                 'thumbnail':f'https://archive.org/services/img/{iid}',
-                'duration':'',
-                'url':f'https://archive.org/details/{iid}',
-                'source':'archive',
-            })
+                'duration':'','url':f'https://archive.org/details/{iid}','source':'archive'})
             if len(tracks)>=n: break
         return tracks
     except Exception as e:
         log.error(f'archive search: {e}'); return []
 
-def get_file(iid):
-    k=f'f:{iid}'
-    c=cg(k)
+def get_archive_file(iid):
+    k=f'f:{iid}'; c=cg(k)
     if c: return c
     try:
         r=requests.get(f'https://archive.org/metadata/{iid}',timeout=10)
         files=r.json().get('files',[])
-        # Prefer mp3, then other audio
-        mp3=[f for f in files if f.get('name','').lower().endswith('.mp3') and f.get('source','')!='derivative']
-        if not mp3:
-            mp3=[f for f in files if f.get('name','').lower().endswith('.mp3')]
-        audio=[f for f in files if any(f.get('name','').lower().endswith(x) for x in['.mp3','.ogg','.m4a','.opus','.flac'])]
-        best=mp3 or audio
-        if best:
-            # Pick smallest file for faster loading (likely a single track not album)
-            sorted_files=sorted([f for f in best if f.get('size')],key=lambda x:int(x.get('size',0)))
-            chosen=sorted_files[0] if sorted_files else best[0]
+        mp3=[f for f in files if f.get('name','').lower().endswith('.mp3')]
+        audio=mp3 or [f for f in files if any(f.get('name','').lower().endswith(x) for x in['.ogg','.m4a','.opus','.flac'])]
+        if audio:
+            chosen=sorted([f for f in audio if f.get('size')],key=lambda x:int(x.get('size',0)))
+            chosen=chosen[0] if chosen else audio[0]
             url=f'https://archive.org/download/{iid}/{chosen["name"]}'
             cs(k,url,60); return url
     except Exception as e:
-        log.error(f'getfile: {e}')
+        log.error(f'archive file: {e}')
     return ''
 
 def search_yt(q,n=10):
@@ -96,14 +131,10 @@ def search_yt(q,n=10):
             vid=i.get('id',{}).get('videoId','')
             if not vid: continue
             sn=i.get('snippet',{})
-            tracks.append({
-                'videoId':vid,
-                'title':sn.get('title','Unknown'),
+            tracks.append({'videoId':vid,'title':sn.get('title','Unknown'),
                 'artist':sn.get('channelTitle','Unknown').replace(' - Topic',''),
                 'thumbnail':sn.get('thumbnails',{}).get('high',{}).get('url',f'https://img.youtube.com/vi/{vid}/mqdefault.jpg'),
-                'duration':'','url':f'https://youtube.com/watch?v={vid}',
-                'source':'youtube',
-            })
+                'duration':'','url':f'https://youtube.com/watch?v={vid}','source':'youtube'})
         return tracks
     except: return []
 
@@ -111,28 +142,16 @@ def search_tracks(q,n=10):
     k=hashlib.md5(f'{q}:{n}'.encode()).hexdigest()
     c=cg(k)
     if c: return c
-    # YouTube API for metadata/display, Archive for actual audio
-    yt_tracks=search_yt(q,n)
-    archive_tracks=search_archive(q,n)
-    # Return YT tracks for display (better metadata/thumbnails)
-    # but mark archive tracks for actual playback
-    tracks=yt_tracks if yt_tracks else archive_tracks
+    tracks=search_yt(q,n) or search_archive(q,n)
     tracks=tracks[:n]
     if tracks: cs(k,tracks)
     return tracks
 
-def get_stream(tid):
-    k=f's:{tid}'
-    c=cg(k)
-    if c: return c
-    # Archive item
-    url=get_file(tid)
-    if url: cs(k,url,60); return url
-    return ''
-
+# --- Routes ---
 @app.route('/api/health')
 def health():
-    return jsonify({'status':'ok','source':'archive.org + youtube_meta'})
+    has_cookies=COOKIES_FILE.exists()
+    return jsonify({'status':'ok','cookies':has_cookies,'source':'youtube+archive'})
 
 @app.route('/api/search')
 def search():
@@ -142,30 +161,47 @@ def search():
     tracks=search_tracks(q,n)
     return jsonify({'tracks':tracks,'count':len(tracks)})
 
+@app.route('/api/stream/<vid>')
+def stream_url(vid):
+    """Get streamable audio URL for a YouTube video ID"""
+    is_yt=bool(re.match(r'^[a-zA-Z0-9_-]{11}$',vid))
+    if is_yt:
+        url=get_yt_stream(vid)
+        if url:
+            return jsonify({'url':url,'source':'youtube'})
+        # fallback: search archive
+        log.info(f'yt-dlp failed for {vid}, trying archive fallback')
+        title=request.args.get('title','')
+        artist=request.args.get('artist','')
+        q=f'{title} {artist}'.strip() or vid
+        archive=search_archive(q,3)
+        if archive:
+            aurl=get_archive_file(archive[0]['videoId'])
+            if aurl:
+                return jsonify({'url':aurl,'source':'archive','track':archive[0]})
+        return jsonify({'error':'No stream available'}),404
+    else:
+        # Archive ID
+        url=get_archive_file(vid)
+        if url: return jsonify({'url':url,'source':'archive'})
+        return jsonify({'error':'Not found'}),404
+
 @app.route('/api/proxy/<tid>')
 def proxy(tid):
-    # For YouTube IDs (11 chars), find on archive
-    if re.match(r'^[a-zA-Z0-9_-]{11}$',tid):
-        # Search archive for same song using the title from cache
-        # Try to get archive equivalent
-        url=''
+    """Proxy audio stream to avoid CORS issues"""
+    is_yt=bool(re.match(r'^[a-zA-Z0-9_-]{11}$',tid))
+    if is_yt:
+        url=get_yt_stream(tid)
     else:
-        url=get_stream(tid)
-    
+        url=get_archive_file(tid)
     if not url:
-        # Last resort - search archive for the video ID as query
-        archive=search_archive(tid,1)
-        if archive:
-            url=get_file(archive[0]['videoId'])
-    
-    if not url: return jsonify({'error':'No stream available'}),404
-    
+        return jsonify({'error':'No stream available'}),404
     try:
-        hdrs={'User-Agent':'Mozilla/5.0'}
+        hdrs={'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         rng=request.headers.get('Range')
         if rng: hdrs['Range']=rng
         r=requests.get(url,headers=hdrs,stream=True,timeout=30)
-        ct=r.headers.get('Content-Type','audio/mpeg')
+        ct=r.headers.get('Content-Type','audio/mp4')
         def gen():
             for chunk in r.iter_content(16384):
                 if chunk: yield chunk
@@ -178,17 +214,17 @@ def proxy(tid):
 
 @app.route('/api/archive-search')
 def archive_search():
-    """Direct archive search with song title for playback"""
     q=request.args.get('q','').strip()
     tracks=search_archive(q,3)
     if tracks:
-        url=get_file(tracks[0]['videoId'])
+        url=get_archive_file(tracks[0]['videoId'])
         return jsonify({'url':url,'track':tracks[0]})
     return jsonify({'error':'Not found on archive'}),404
 
 @app.route('/api/download/<tid>')
 def download(tid):
-    url=get_stream(tid)
+    is_yt=bool(re.match(r'^[a-zA-Z0-9_-]{11}$',tid))
+    url=get_yt_stream(tid) if is_yt else get_archive_file(tid)
     if not url: return jsonify({'error':'Not available'}),404
     title=re.sub(r'[^\w\s-]','',request.args.get('title',tid))[:50]
     out=CACHE_DIR/f'{tid}.mp3'
