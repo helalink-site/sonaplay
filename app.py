@@ -44,77 +44,64 @@ def cs(k,d,m=30):
     _cache[k]=(d,datetime.now()+timedelta(minutes=m))
 
 # --- yt-dlp stream extraction ---
-# Invidious instances to try
-INVIDIOUS_INSTANCES=[
-    'https://invidious.snopyta.org',
-    'https://inv.riverside.rocks',
-    'https://invidious.kavin.rocks',
-    'https://yt.artemislena.eu',
-    'https://invidious.projectsegfau.lt',
-]
-
-# Piped instances as fallback
-PIPED_INSTANCES=[
-    'https://pipedapi.kavin.rocks',
-    'https://piped-api.garudalinux.org',
-    'https://api.piped.projectsegfau.lt',
+# Working stream sources in 2026
+COBALT_INSTANCES=[
+    'https://cobalt.tools',
+    'https://co.wuk.sh',
 ]
 
 def get_yt_stream(video_id):
-    """Get audio stream via Invidious then Piped API"""
+    """Get audio stream via cobalt.tools API"""
     k=f'yt:{video_id}'
     c=cg(k)
     if c: return c
 
-    # Try Invidious first
-    for instance in INVIDIOUS_INSTANCES:
+    yt_url=f'https://www.youtube.com/watch?v={video_id}'
+    headers={
+        'Accept':'application/json',
+        'Content-Type':'application/json',
+        'User-Agent':'Mozilla/5.0'
+    }
+
+    for base in COBALT_INSTANCES:
         try:
-            r=requests.get(f'{instance}/api/v1/videos/{video_id}',
-                params={'fields':'adaptiveFormats,formatStreams'},
-                headers={'User-Agent':'Mozilla/5.0'},timeout=10)
+            r=requests.post(f'{base}/api/json',
+                json={'url':yt_url,'isAudioOnly':True,'aFormat':'mp3','filenamePattern':'basic'},
+                headers=headers,timeout=15)
             if r.status_code!=200:
+                log.warning(f'Cobalt {base} status {r.status_code}')
                 continue
             data=r.json()
-            # adaptiveFormats has audio-only streams
-            formats=data.get('adaptiveFormats',[])
+            status=data.get('status','')
+            url=data.get('url','')
+            if status in ('stream','redirect','tunnel') and url:
+                cs(k,url,50)
+                log.info(f'Cobalt OK: {video_id} via {base}')
+                return url
+            log.warning(f'Cobalt {base} bad status: {status} data:{str(data)[:100]}')
+        except Exception as e:
+            log.warning(f'Cobalt {base} error: {e}')
+            continue
+
+    # Last resort: try inv.nadeko.net (currently one of few working invidious)
+    try:
+        r=requests.get(f'https://inv.nadeko.net/api/v1/videos/{video_id}',
+            params={'fields':'adaptiveFormats'},
+            headers={'User-Agent':'Mozilla/5.0'},timeout=12)
+        if r.status_code==200:
+            formats=r.json().get('adaptiveFormats',[])
             audio=[f for f in formats if 'audio' in f.get('type','') and 'video' not in f.get('type','')]
-            if not audio:
-                # fallback to formatStreams (combined)
-                audio=data.get('formatStreams',[])
-            if not audio:
-                continue
-            best=sorted(audio,key=lambda x:int(x.get('bitrate',0)),reverse=True)
-            url=best[0].get('url','')
-            if url and url.startswith('http'):
-                cs(k,url,50)
-                log.info(f'Invidious OK: {video_id} via {instance}')
-                return url
-        except Exception as e:
-            log.warning(f'Invidious {instance} failed: {e}')
-            continue
+            if audio:
+                best=sorted(audio,key=lambda x:int(x.get('bitrate',0)),reverse=True)
+                url=best[0].get('url','')
+                if url:
+                    cs(k,url,40)
+                    log.info(f'Nadeko OK: {video_id}')
+                    return url
+    except Exception as e:
+        log.warning(f'Nadeko failed: {e}')
 
-    # Try Piped as fallback
-    for instance in PIPED_INSTANCES:
-        try:
-            r=requests.get(f'{instance}/streams/{video_id}',
-                headers={'User-Agent':'Mozilla/5.0'},timeout=10)
-            if r.status_code!=200:
-                continue
-            data=r.json()
-            audio_streams=data.get('audioStreams',[])
-            if not audio_streams:
-                continue
-            best=sorted(audio_streams,key=lambda x:x.get('bitrate',0),reverse=True)
-            url=best[0].get('url','')
-            if url and url.startswith('http'):
-                cs(k,url,50)
-                log.info(f'Piped OK: {video_id} via {instance}')
-                return url
-        except Exception as e:
-            log.warning(f'Piped {instance} failed: {e}')
-            continue
-
-    log.error(f'All instances failed for {video_id}')
+    log.error(f'All stream sources failed for {video_id}')
     return ''
 
 # --- Archive.org fallback ---
