@@ -18,7 +18,7 @@ _cache={}
 # --- Cookies setup ---
 # Cookies can be set via YOUTUBE_COOKIES_B64 env var (base64 of cookies.txt)
 # or by placing cookies.txt in the project root
-COOKIES_FILE=Path(os.getenv('COOKIES_PATH','cookies.txt'))
+COOKIES_FILE=Path(os.getenv('COOKIES_PATH','/etc/secrets/cookies.txt'))
 
 def ensure_cookies():
     """Load cookies from env var if file doesn't exist"""
