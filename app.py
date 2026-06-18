@@ -44,21 +44,56 @@ def cs(k,d,m=30):
     _cache[k]=(d,datetime.now()+timedelta(minutes=m))
 
 # --- yt-dlp stream extraction ---
-# Piped instances to try in order
+# Invidious instances to try
+INVIDIOUS_INSTANCES=[
+    'https://invidious.snopyta.org',
+    'https://inv.riverside.rocks',
+    'https://invidious.kavin.rocks',
+    'https://yt.artemislena.eu',
+    'https://invidious.projectsegfau.lt',
+]
+
+# Piped instances as fallback
 PIPED_INSTANCES=[
     'https://pipedapi.kavin.rocks',
     'https://piped-api.garudalinux.org',
     'https://api.piped.projectsegfau.lt',
-    'https://pipedapi.adminforge.de',
 ]
 
 def get_yt_stream(video_id):
-    """Get audio stream via Piped API (avoids datacenter IP blocks)"""
+    """Get audio stream via Invidious then Piped API"""
     k=f'yt:{video_id}'
     c=cg(k)
     if c: return c
 
-    # Try each Piped instance
+    # Try Invidious first
+    for instance in INVIDIOUS_INSTANCES:
+        try:
+            r=requests.get(f'{instance}/api/v1/videos/{video_id}',
+                params={'fields':'adaptiveFormats,formatStreams'},
+                headers={'User-Agent':'Mozilla/5.0'},timeout=10)
+            if r.status_code!=200:
+                continue
+            data=r.json()
+            # adaptiveFormats has audio-only streams
+            formats=data.get('adaptiveFormats',[])
+            audio=[f for f in formats if 'audio' in f.get('type','') and 'video' not in f.get('type','')]
+            if not audio:
+                # fallback to formatStreams (combined)
+                audio=data.get('formatStreams',[])
+            if not audio:
+                continue
+            best=sorted(audio,key=lambda x:int(x.get('bitrate',0)),reverse=True)
+            url=best[0].get('url','')
+            if url and url.startswith('http'):
+                cs(k,url,50)
+                log.info(f'Invidious OK: {video_id} via {instance}')
+                return url
+        except Exception as e:
+            log.warning(f'Invidious {instance} failed: {e}')
+            continue
+
+    # Try Piped as fallback
     for instance in PIPED_INSTANCES:
         try:
             r=requests.get(f'{instance}/streams/{video_id}',
@@ -66,22 +101,20 @@ def get_yt_stream(video_id):
             if r.status_code!=200:
                 continue
             data=r.json()
-            # Get best audio stream
             audio_streams=data.get('audioStreams',[])
             if not audio_streams:
                 continue
-            # Sort by bitrate, pick highest
             best=sorted(audio_streams,key=lambda x:x.get('bitrate',0),reverse=True)
             url=best[0].get('url','')
             if url and url.startswith('http'):
-                cs(k,url,55)
+                cs(k,url,50)
                 log.info(f'Piped OK: {video_id} via {instance}')
                 return url
         except Exception as e:
             log.warning(f'Piped {instance} failed: {e}')
             continue
 
-    log.error(f'All Piped instances failed for {video_id}')
+    log.error(f'All instances failed for {video_id}')
     return ''
 
 # --- Archive.org fallback ---
