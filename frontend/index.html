@@ -771,19 +771,58 @@ async function play(track,q,idx){
   toast('⏳ Loading...');
 
   let streamUrl='';
+  const vid=track.videoId;
+  const isYT=/^[a-zA-Z0-9_-]{11}$/.test(vid);
 
-  try{
-    // Get direct stream URL from yt-dlp backend
-    const params=new URLSearchParams({
-      title:track.title||'',
-      artist:track.artist||''
-    });
-    const r=await fetch(`${API}/stream/${track.videoId}?${params}`);
-    const d=await r.json();
-    // Use direct URL — googlevideo.com blocks server proxy, must play direct
-    if(d.url) streamUrl=d.url;
-  }catch(e){
-    console.error('Stream fetch error:',e);
+  if(isYT){
+    // Try multiple browser-side extraction methods
+    const tried=[];
+
+    // Method 1: cobalt.tools API (CORS-enabled)
+    try{
+      const cb=await fetch('https://cobalt.tools/api/json',{
+        method:'POST',
+        headers:{'Accept':'application/json','Content-Type':'application/json'},
+        body:JSON.stringify({url:`https://youtu.be/${vid}`,isAudioOnly:true,aFormat:'mp3'})
+      });
+      const cd=await cb.json();
+      if(cd.url) streamUrl=cd.url;
+      tried.push('cobalt:'+cd.status);
+    }catch(e){tried.push('cobalt:err');}
+
+    // Method 2: inv.nadeko.net Invidious API
+    if(!streamUrl){
+      try{
+        const iv=await fetch(`https://inv.nadeko.net/api/v1/videos/${vid}?fields=adaptiveFormats`);
+        const id=await iv.json();
+        const af=(id.adaptiveFormats||[]).filter(f=>f.type&&f.type.includes('audio')&&!f.type.includes('video'));
+        if(af.length){
+          const best=af.sort((a,b)=>parseInt(b.bitrate||0)-parseInt(a.bitrate||0))[0];
+          if(best.url) streamUrl=best.url;
+        }
+        tried.push('nadeko:'+(streamUrl?'ok':'no'));
+      }catch(e){tried.push('nadeko:err');}
+    }
+
+    // Method 3: inv.thepixora.com
+    if(!streamUrl){
+      try{
+        const iv2=await fetch(`https://inv.thepixora.com/api/v1/videos/${vid}?fields=adaptiveFormats`);
+        const id2=await iv2.json();
+        const af2=(id2.adaptiveFormats||[]).filter(f=>f.type&&f.type.includes('audio')&&!f.type.includes('video'));
+        if(af2.length){
+          const best2=af2.sort((a,b)=>parseInt(b.bitrate||0)-parseInt(a.bitrate||0))[0];
+          if(best2.url) streamUrl=best2.url;
+        }
+        tried.push('pixora:'+(streamUrl?'ok':'no'));
+      }catch(e){tried.push('pixora:err');}
+    }
+
+    console.log('Stream attempts:',tried.join(', '));
+  } else {
+    // Archive.org — use proxy
+    const r=await fetch(`${API}/stream/${vid}`).catch(()=>null);
+    if(r&&r.ok){const d=await r.json();if(d.url)streamUrl=`${API}/proxy/${vid}`;}
   }
 
   if(!streamUrl){toast('❌ Song not available');updateBtn(false);return;}
@@ -796,7 +835,7 @@ async function play(track,q,idx){
     document.getElementById('fpArt').classList.add('playing');
     addHist(track);setMS(track);
     setTimeout(()=>toast(''),1000);
-  }catch(e){toast('❌ Playback failed');updateBtn(false);}
+  }catch(e){toast('❌ Playback failed: '+e.message);updateBtn(false);}
 }
 function updateUI(t){
   const th=t.thumbnail||'icons/icon-192.png',ti=t.title||'Unknown',ar=t.artist||'Unknown';
