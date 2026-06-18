@@ -57,6 +57,8 @@ def get_yt_stream(video_id):
         '--get-url',
         '--no-warnings',
         '--quiet',
+        '--extractor-args','youtube:player_client=android,web',
+        '--add-header','User-Agent:Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36',
     ]
     if COOKIES_FILE.exists():
         cmd+=['--cookies',str(COOKIES_FILE)]
