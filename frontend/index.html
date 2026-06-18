@@ -769,7 +769,24 @@ async function play(track,q,idx){
   updateUI(track);
   document.getElementById('mini').classList.add('show');
   toast('⏳ Loading...');
-  audio.src=`${API}/proxy/${track.videoId}`;
+  
+  let streamUrl='';
+  
+  // If it's a YouTube ID (11 chars), search Archive for same song
+  if(/^[a-zA-Z0-9_-]{11}$/.test(track.videoId)){
+    try{
+      const q2=`${track.title} ${track.artist}`.replace(/official|video|music|vevo/gi,'').trim();
+      const r=await fetch(`${API}/archive-search?q=${encodeURIComponent(q2)}`);
+      const d=await r.json();
+      if(d.url) streamUrl=`${API}/proxy/${d.track.videoId}`;
+    }catch(e){}
+  } else {
+    streamUrl=`${API}/proxy/${track.videoId}`;
+  }
+  
+  if(!streamUrl){toast('❌ Song not available on Archive');updateBtn(false);return;}
+  
+  audio.src=streamUrl;
   audio.load();
   try{
     await audio.play();
