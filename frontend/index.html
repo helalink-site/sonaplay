@@ -291,7 +291,22 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 .opts-item i{font-size:1rem;color:var(--v);width:18px;}
 .opts-item.danger i,.opts-item.danger{color:var(--c);}
 /* OFFLINE BADGE */
-.offline-badge{background:rgba(255,101,132,.15);color:var(--c);border:1px solid rgba(255,101,132,.3);font-size:.65rem;padding:.15rem .4rem;border-radius:50px;margin-left:.4rem;vertical-align:middle;}
+.offline-badge{background:rgba(108,99,255,.15);color:var(--v);border:1px solid rgba(108,99,255,.3);font-size:.62rem;padding:.12rem .38rem;border-radius:50px;margin-left:.4rem;vertical-align:middle;font-weight:600;}
+/* OFFLINE PAGE */
+.offline-header{background:linear-gradient(135deg,rgba(108,99,255,.15),rgba(168,85,247,.1));border:1px solid rgba(108,99,255,.2);border-radius:16px;padding:1rem 1.1rem;margin-bottom:1rem;display:flex;align-items:center;gap:.9rem;}
+.offline-icon{width:46px;height:46px;border-radius:13px;background:linear-gradient(135deg,#6C63FF,#A855F7);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:1.3rem;}
+.offline-info{flex:1;}
+.offline-title{font-family:'Syne',sans-serif;font-size:.95rem;font-weight:700;}
+.offline-sub{font-size:.73rem;color:var(--m);margin-top:.15rem;}
+.offline-count{font-size:.75rem;font-weight:700;color:var(--v);background:rgba(108,99,255,.15);padding:.2rem .55rem;border-radius:50px;}
+.offline-status{display:flex;align-items:center;gap:.4rem;font-size:.72rem;margin-bottom:.8rem;}
+.status-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;flex-shrink:0;}
+.status-dot.offline{background:var(--c);}
+.offline-empty{display:flex;flex-direction:column;align-items:center;padding:2.5rem 1rem;gap:.8rem;color:var(--m);text-align:center;}
+.offline-empty-icon{width:72px;height:72px;border-radius:20px;background:var(--s2);display:flex;align-items:center;justify-content:center;font-size:2rem;margin-bottom:.3rem;}
+.offline-empty h3{font-family:'Syne',sans-serif;font-size:1rem;font-weight:700;color:var(--t);}
+.offline-empty p{font-size:.8rem;line-height:1.5;max-width:240px;}
+.offline-empty-btn{padding:.65rem 1.4rem;border-radius:50px;background:linear-gradient(135deg,#6C63FF,#A855F7);border:none;color:#fff;font-family:'Syne',sans-serif;font-weight:700;font-size:.82rem;cursor:pointer;margin-top:.3rem;}
 
 /* INSTALL BANNER */
 #ibanner{display:none;position:fixed;bottom:calc(var(--nav) + 72px + var(--safe) + .5rem);left:.7rem;right:.7rem;background:var(--s2);border:1px solid var(--v);border-radius:17px;padding:.9rem 1.1rem;z-index:300;box-shadow:0 4px 20px rgba(108,99,255,.3);}
@@ -448,10 +463,10 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
       <div class="sh-t" style="font-family:'Syne',sans-serif;font-size:1.2rem;margin-bottom:1rem">My Library</div>
       <div class="ltabs">
         <div class="ltab on" onclick="setLibTab(this,'liked')">❤️ Liked</div>
-        <div class="ltab" onclick="setLibTab(this,'downloads')">⬇️ Downloads</div>
+        <div class="ltab" onclick="setLibTab(this,'offline')" id="offlineTab">📱 Offline</div>
         <div class="ltab" onclick="setLibTab(this,'history')">🕐 History</div>
       </div>
-      <div class="tlist" id="libContent"></div>
+      <div id="libContent"></div>
     </div>
   </div>
 
@@ -740,7 +755,7 @@ function playLocal(i){
 function enterMain(){
   guest=false;hide();
   document.getElementById('main').classList.add('show');
-  updateUserUI();buildGrids();restorePrefs();updateSubs();loadLib('liked');loadHome();
+  updateUserUI();buildGrids();restorePrefs();updateSubs();loadLib('liked');loadHome();updateOfflineBadge();
   checkPWA();
 }
 function hide(){
@@ -908,7 +923,7 @@ async function saveOffline(track,url){
     toast('✅ Saved offline!');
     lib.downloads=lib.downloads.filter(x=>x.videoId!==track.videoId);
     lib.downloads.unshift({...track,offline:true});
-    saveLib();
+    saveLib();updateOfflineBadge();
   }catch(e){toast('❌ Save failed: '+e.message);}
 }
 async function getOfflineUrl(videoId){
@@ -1125,18 +1140,60 @@ function setMS(t){if(!('mediaSession' in navigator))return;navigator.mediaSessio
 function setLibTab(el,tab){document.querySelectorAll('.ltab').forEach(t=>t.classList.remove('on'));el.classList.add('on');loadLib(tab);}
 async function loadLib(tab){
   const el=document.getElementById('libContent');
-  let tracks=lib[tab]||[];
-  if(tab==='downloads'){
-    // Merge with IndexedDB offline tracks
-    const offline=await getOfflineTracks();
-    const ids=new Set(tracks.map(t=>t.videoId));
-    offline.forEach(t=>{if(!ids.has(t.videoId))tracks.push(t);});
-    tracks.sort((a,b)=>(b.savedAt||0)-(a.savedAt||0));
+  const isOnline=navigator.onLine;
+
+  if(tab==='offline'){
+    // Show offline library
+    const tracks=await getOfflineTracks();
+    const count=tracks.length;
+
+    let html=`<div class="offline-header">
+      <div class="offline-icon">📱</div>
+      <div class="offline-info">
+        <div class="offline-title">Offline Library</div>
+        <div class="offline-sub">${count} song${count!==1?'s':''} saved • Play anywhere</div>
+      </div>
+      <div class="offline-count">${count}</div>
+    </div>
+    <div class="offline-status">
+      <div class="status-dot${isOnline?'':' offline'}"></div>
+      <span>${isOnline?'Online — streaming available':'Offline mode — playing saved songs only'}</span>
+    </div>`;
+
+    if(!count){
+      html+=`<div class="offline-empty">
+        <div class="offline-empty-icon">🎵</div>
+        <h3>No offline songs yet</h3>
+        <p>Tap the ⋮ menu on any song and choose <strong>Download</strong> to save it for offline play.</p>
+        <button class="offline-empty-btn" onclick="showPage('search')">Find Songs to Download</button>
+      </div>`;
+    } else {
+      window.libQ=tracks;
+      html+=`<div class="tlist">${tracks.map((t,i)=>tRow(t,i,'libQ')).join('')}</div>`;
+    }
+    el.innerHTML=html;
+    return;
   }
-  if(!tracks.length){el.innerHTML=`<div class="empty"><i class="ph ph-music-notes-simple"></i><p>No ${tab} yet</p></div>`;return;}
+
+  let tracks=lib[tab]||[];
+  if(!tracks.length){
+    el.innerHTML=`<div class="empty"><i class="ph ph-music-notes-simple"></i><p>No ${tab} yet</p></div>`;
+    return;
+  }
   window.libQ=tracks;
-  el.innerHTML=tracks.map((t,i)=>tRow(t,i,'libQ')).join('');
+  el.innerHTML=`<div class="tlist">${tracks.map((t,i)=>tRow(t,i,'libQ')).join('')}</div>`;
 }
+
+// Update offline tab badge count
+async function updateOfflineBadge(){
+  const tracks=await getOfflineTracks();
+  const tab=document.getElementById('offlineTab');
+  if(tab)tab.textContent=`📱 Offline${tracks.length?` (${tracks.length})`:''}`;
+}
+
+// Listen for online/offline changes
+window.addEventListener('online',()=>{toast('🌐 Back online');});
+window.addEventListener('offline',()=>{toast('📱 Offline mode — downloaded songs available');});
 function addHist(t){lib.history=[t,...lib.history.filter(x=>x.videoId!==t.videoId)].slice(0,50);saveLib();}
 function toggleLike(){
   const t=queue[qIdx];if(!t)return;
