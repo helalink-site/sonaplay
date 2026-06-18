@@ -44,38 +44,44 @@ def cs(k,d,m=30):
     _cache[k]=(d,datetime.now()+timedelta(minutes=m))
 
 # --- yt-dlp stream extraction ---
+# Piped instances to try in order
+PIPED_INSTANCES=[
+    'https://pipedapi.kavin.rocks',
+    'https://piped-api.garudalinux.org',
+    'https://api.piped.projectsegfau.lt',
+    'https://pipedapi.adminforge.de',
+]
+
 def get_yt_stream(video_id):
-    """Use yt-dlp with cookies to get direct audio stream URL"""
+    """Get audio stream via Piped API (avoids datacenter IP blocks)"""
     k=f'yt:{video_id}'
     c=cg(k)
     if c: return c
-    url=f'https://www.youtube.com/watch?v={video_id}'
-    cmd=[
-        'yt-dlp',
-        '--no-playlist',
-        '-f','bestaudio[ext=m4a]/bestaudio/best',
-        '--get-url',
-        '--no-warnings',
-        '--quiet',
-        '--extractor-args','youtube:player_client=android,web',
-        '--add-header','User-Agent:Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Mobile Safari/537.36',
-    ]
-    if COOKIES_FILE.exists():
-        cmd+=['--cookies',str(COOKIES_FILE)]
-    cmd.append(url)
-    try:
-        result=subprocess.run(cmd,capture_output=True,text=True,timeout=30)
-        stream_url=result.stdout.strip().split('\n')[0]
-        if stream_url and stream_url.startswith('http'):
-            cs(k,stream_url,55)  # cache ~55min (YT URLs expire ~6h but refresh often)
-            log.info(f'yt-dlp OK: {video_id}')
-            return stream_url
-        else:
-            log.error(f'yt-dlp no URL for {video_id}: {result.stderr[:200]}')
-    except subprocess.TimeoutExpired:
-        log.error(f'yt-dlp timeout: {video_id}')
-    except Exception as e:
-        log.error(f'yt-dlp error: {e}')
+
+    # Try each Piped instance
+    for instance in PIPED_INSTANCES:
+        try:
+            r=requests.get(f'{instance}/streams/{video_id}',
+                headers={'User-Agent':'Mozilla/5.0'},timeout=10)
+            if r.status_code!=200:
+                continue
+            data=r.json()
+            # Get best audio stream
+            audio_streams=data.get('audioStreams',[])
+            if not audio_streams:
+                continue
+            # Sort by bitrate, pick highest
+            best=sorted(audio_streams,key=lambda x:x.get('bitrate',0),reverse=True)
+            url=best[0].get('url','')
+            if url and url.startswith('http'):
+                cs(k,url,55)
+                log.info(f'Piped OK: {video_id} via {instance}')
+                return url
+        except Exception as e:
+            log.warning(f'Piped {instance} failed: {e}')
+            continue
+
+    log.error(f'All Piped instances failed for {video_id}')
     return ''
 
 # --- Archive.org fallback ---
