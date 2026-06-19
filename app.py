@@ -147,7 +147,51 @@ def get_archive_file(iid):
         log.error(f'archive file: {e}')
     return ''
 
+INV_SEARCH_INSTANCES=[
+    'https://inv.nadeko.net',
+    'https://inv.thepixora.com',
+    'https://invidious.nerdvpn.de',
+    'https://invidious.privacyredirect.com',
+    'https://iv.datura.network',
+]
+
+def search_invidious(q,n=10):
+    """Search via Invidious - no API key, no quota limits"""
+    for base in INV_SEARCH_INSTANCES:
+        try:
+            r=requests.get(f'{base}/api/v1/search',params={
+                'q':q,'type':'video',
+            },timeout=8)
+            if r.status_code!=200: continue
+            items=r.json()
+            tracks=[]
+            for i in items:
+                vid=i.get('videoId','')
+                if not vid: continue
+                thumbs=i.get('videoThumbnails',[])
+                thumb=''
+                if thumbs:
+                    high=[t for t in thumbs if t.get('quality')=='high']
+                    thumb=(high[0] if high else thumbs[0]).get('url','')
+                if thumb and thumb.startswith('/'):
+                    thumb=f'https://img.youtube.com/vi/{vid}/mqdefault.jpg'
+                dur=i.get('lengthSeconds',0)
+                dur_str=f'{dur//60}:{dur%60:02d}' if dur else ''
+                tracks.append({'videoId':vid,'title':i.get('title','Unknown'),
+                    'artist':i.get('author','Unknown'),
+                    'thumbnail':thumb or f'https://img.youtube.com/vi/{vid}/mqdefault.jpg',
+                    'duration':dur_str,'url':f'https://youtube.com/watch?v={vid}','source':'youtube'})
+                if len(tracks)>=n: break
+            if tracks:
+                log.info(f'Invidious search OK via {base}: {len(tracks)} results')
+                return tracks
+        except Exception as e:
+            log.warning(f'Invidious search {base} failed: {e}')
+            continue
+    return []
+
 def search_yt(q,n=10):
+    """Fallback: YouTube Data API (quota limited)"""
     if not YT_KEY: return []
     try:
         r=requests.get('https://www.googleapis.com/youtube/v3/search',params={
@@ -170,9 +214,10 @@ def search_tracks(q,n=10):
     k=hashlib.md5(f'{q}:{n}'.encode()).hexdigest()
     c=cg(k)
     if c: return c
-    tracks=search_yt(q,n) or search_archive(q,n)
+    # Primary: Invidious (no quota), fallback: YouTube API, last resort: Archive
+    tracks=search_invidious(q,n) or search_yt(q,n) or search_archive(q,n)
     tracks=tracks[:n]
-    if tracks: cs(k,tracks)
+    if tracks: cs(k,tracks,15)  # cache 15min
     return tracks
 
 # --- Routes ---
