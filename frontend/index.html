@@ -773,23 +773,53 @@ function updateUserUI(){
 }
 
 // HOME
+// Genre → proper search terms that return individual songs
+const GENRE_QUERIES={
+  'afrobeats':['Burna Boy official audio','Wizkid official audio','Davido official video'],
+  'bongo':['Diamond Platnumz official video','Rayvanny official video','Harmonize official video'],
+  'hip-hop':['Khaligraph Jones official','Mejja official audio','Nyashinski official'],
+  'pop':['Sauti Sol official','Bien official audio','Otile Brown official'],
+  'gospel':['gospel music Kenya 2026','gospel Tanzania 2026'],
+  'kenya':['Kenyan music official 2026','Kenya bongo official'],
+  'nigeria':['Nigerian afrobeats official 2026'],
+  '':['Diamond Platnumz official video','Burna Boy official audio','Rayvanny official video'],
+};
+
+function genreQuery(g){
+  const queries=GENRE_QUERIES[g]||GENRE_QUERIES[''];
+  return queries[Math.floor(Math.random()*queries.length)];
+}
+
+// Filter out mixes/compilations from results
+function filterSongs(tracks){
+  const mixWords=['mix','compilation','playlist','collection','vol.','vol ','ep ','album','mixtape','best of','nonstop','non-stop','mashup'];
+  return tracks.filter(t=>{
+    const title=(t.title||'').toLowerCase();
+    return !mixWords.some(w=>title.includes(w));
+  });
+}
+
 async function loadHome(){
   try{
-    const g=prefs.genres[0]||'afrobeats bongo';
-    const a=prefs.artists.length?prefs.artists[Math.floor(Math.random()*prefs.artists.length)]:'Diamond Platnumz Rayvanny';
+    const g=prefs.genres[0]||'';
+    const a=prefs.artists.length?prefs.artists[Math.floor(Math.random()*prefs.artists.length)]:'Diamond Platnumz';
+    const newQ=genreQuery(g);
+    const trendQ=prefs.genres[1]?genreQuery(prefs.genres[1]):genreQuery('bongo');
+    const forYouQ=prefs.artists.length?`${a} official video`:genreQuery('afrobeats');
     const[r1,r2,r3]=await Promise.all([
-      fetch(`${API}/search?q=${encodeURIComponent('new '+g+' 2025')}&limit=8`),
-      fetch(`${API}/search?q=${encodeURIComponent('trending '+g)}&limit=5`),
-      fetch(`${API}/search?q=${encodeURIComponent(prefs.artists.length?a:'trending east africa 2025')}&limit=8`),
+      fetch(`${API}/search?q=${encodeURIComponent(newQ)}&limit=12`),
+      fetch(`${API}/search?q=${encodeURIComponent(trendQ)}&limit=8`),
+      fetch(`${API}/search?q=${encodeURIComponent(forYouQ)}&limit=12`),
     ]);
     const[d1,d2,d3]=await Promise.all([r1.json(),r2.json(),r3.json()]);
-    window.nTracks=d1.tracks||[];
-    window.trTracks=d2.tracks||[];
-    window.fyTracks=d3.tracks||[];
+    window.nTracks=filterSongs(d1.tracks||[]).slice(0,8);
+    window.trTracks=filterSongs(d2.tracks||[]).slice(0,5);
+    window.fyTracks=filterSongs(d3.tracks||[]).slice(0,8);
     renderCards('newRow',nTracks,'nTracks');
     renderTrend(trTracks);
     renderCards('fyRow',fyTracks,'fyTracks');
     if(nTracks[0])setFeat(nTracks[0]);
+    else if(trTracks[0])setFeat(trTracks[0]);
   }catch(e){toast('Failed to load. Check connection.');}
 }
 function setFeat(t){
@@ -829,7 +859,13 @@ function tRow(t,i,qn){
 }
 function seeAll(type){
   showPage('search');
-  const q=type==='new'?'new afrobeats bongo 2025':'trending afrobeats 2025';
+  const g=prefs.genres[0]||'';
+  let q;
+  if(type==='new'){
+    q=genreQuery(g)||'Diamond Platnumz official video';
+  } else {
+    q=genreQuery(prefs.genres[1]||'')||'Burna Boy official audio';
+  }
   document.getElementById('sinput').value=q;
   doSearch(q);
 }
@@ -838,7 +874,15 @@ function seeAll(type){
 let sTimer,activeChip='';
 function onSearch(v){clearTimeout(sTimer);if(!v.trim()){document.getElementById('sResults').innerHTML='';return;}sTimer=setTimeout(()=>doSearch(v),500);}
 function clearSearch(){document.getElementById('sinput').value='';document.getElementById('sResults').innerHTML='';}
-function setChip(el,g){document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');activeChip=g;const q=document.getElementById('sinput').value||g;if(q)doSearch(q);}
+function setChip(el,g){
+  document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  activeChip=g;
+  const typed=document.getElementById('sinput').value.trim();
+  // If user typed something, add genre filter; else use genre-specific artist query
+  const q=typed?`${typed} ${g}`.trim():(g?genreQuery(g):genreQuery(''));
+  if(q){document.getElementById('sinput').value=q;doSearch(q);}
+}
 async function doSearch(q){
   const query=activeChip?`${q} ${activeChip}`:q;
   const el=document.getElementById('sResults');
@@ -846,8 +890,11 @@ async function doSearch(q){
   try{
     const r=await fetch(`${API}/search?q=${encodeURIComponent(query)}&limit=15`);
     const d=await r.json();
-    window.sTracks=d.tracks||[];
-    if(!sTracks.length){el.innerHTML='<div style="color:var(--m);padding:1rem;text-align:center">No results</div>';return;}
+    const raw=d.tracks||[];
+    const mixWords=['mix','compilation','playlist','vol.','nonstop','non-stop','mashup','mixtape'];
+    const hasMixWord=mixWords.some(w=>query.toLowerCase().includes(w));
+    window.sTracks=hasMixWord?raw:filterSongs(raw);
+    if(!sTracks.length){el.innerHTML='<div style="color:var(--m);padding:1rem;text-align:center">No results found</div>';return;}
     el.innerHTML=sTracks.map((t,i)=>tRow(t,i,'sTracks')).join('');
   }catch(e){el.innerHTML='<div style="color:var(--c);padding:1rem">Search failed</div>';}
 }
