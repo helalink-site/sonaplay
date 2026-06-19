@@ -118,6 +118,22 @@ def get_stream(vid):
             log.error(f'stream:{e}')
     return''
 
+@app.route('/api/test')
+def test():
+    cmd=['yt-dlp','https://youtube.com/watch?v=BQ1zn3KwKS8',
+         '--get-url','-f','bestaudio/best',
+         '--extractor-args','youtube:player_client=android',
+         '--no-warnings']
+    if COOKIES_FILE.exists():
+        cmd+=['--cookies',str(COOKIES_FILE)]
+    r=subprocess.run(cmd,capture_output=True,text=True,timeout=30)
+    return jsonify({
+        'stdout':r.stdout[:300],
+        'stderr':r.stderr[:500],
+        'returncode':r.returncode,
+        'cookies':COOKIES_FILE.exists()
+    })
+
 @app.route('/api/health')
 def health():
     return jsonify({'status':'ok','cookies':COOKIES_FILE.exists(),'yt_api':bool(YT_KEY)})
@@ -180,3 +196,4 @@ def serve(path):
 if __name__=='__main__':
     log.info(f'Sona - cookies:{"YES" if COOKIES_FILE.exists() else "NO"}')
     app.run(host='0.0.0.0',port=PORT,debug=False)
+# Already complete - just need to check the debug
