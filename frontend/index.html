@@ -901,15 +901,32 @@ async function doSearch(q){
 }
 
 // ============ STREAM ENGINE ============
-const INV_INSTANCES=[
+// Fallback hardcoded list (used if dynamic fetch fails)
+const FALLBACK_INSTANCES=[
   'https://inv.nadeko.net',
   'https://inv.thepixora.com',
   'https://invidious.nerdvpn.de',
   'https://invidious.privacyredirect.com',
   'https://iv.datura.network',
-  'https://invidious.io.lol',
-  'https://invidious.lunar.icu',
+  'https://yt.chocolatemoo53.com',
 ];
+
+let _liveInstances=null;
+async function getLiveInstances(){
+  if(_liveInstances)return _liveInstances;
+  try{
+    const r=await fetch('https://api.invidious.io/instances.json?sort_by=type,health',{signal:AbortSignal.timeout(5000)});
+    const data=await r.json();
+    const healthy=data
+      .filter(([name,info])=>info.type==='https'&&info.api&&(info.monitor?.['30dRatio']?.ratio||0)>50)
+      .map(([name])=>`https://${name}`)
+      .slice(0,10);
+    _liveInstances=healthy.length?healthy:FALLBACK_INSTANCES;
+  }catch(e){
+    _liveInstances=FALLBACK_INSTANCES;
+  }
+  return _liveInstances;
+}
 
 function pickBestAudio(formats){
   if(!formats?.length)return null;
@@ -936,11 +953,13 @@ async function tryInvInstance(base,vid){
 }
 
 async function getStreamUrl(vid){
-  // Race all instances simultaneously
+  const instances=await getLiveInstances();
+  // Race all instances simultaneously, plus fallback list too for max coverage
+  const allInstances=[...new Set([...instances,...FALLBACK_INSTANCES])];
   return new Promise(async(resolve)=>{
     let resolved=false;
     const done=(url)=>{if(!resolved&&url){resolved=true;resolve(url);}};
-    const promises=INV_INSTANCES.map(inst=>tryInvInstance(inst,vid).then(done));
+    const promises=allInstances.map(inst=>tryInvInstance(inst,vid).then(done));
     await Promise.allSettled(promises);
     if(!resolved)resolve(null);
   });
@@ -961,18 +980,32 @@ function initDB(){
   });
 }
 async function saveOffline(track,url){
-  if(!db)return;
+  if(!db)return false;
   try{
-    const r=await fetch(url);
+    // Use backend proxy to avoid CORS issues with googlevideo.com
+    const realVid=track._resolvedVideoId||track.videoId;
+    const isYT=/^[a-zA-Z0-9_-]{11}$/.test(realVid);
+    const fetchUrl=isYT?`${API}/proxy/${realVid}`:url;
+
+    const r=await fetch(fetchUrl);
+    if(!r.ok)throw new Error('Fetch failed: '+r.status);
     const blob=await r.blob();
+    if(!blob||blob.size<1000)throw new Error('Empty or invalid audio data');
+
     const tx=db.transaction(['tracks','blobs'],'readwrite');
     tx.objectStore('tracks').put({...track,offline:true,savedAt:Date.now()});
     tx.objectStore('blobs').put({videoId:track.videoId,blob,type:blob.type});
+    await new Promise(res=>{tx.oncomplete=res;tx.onerror=res;});
+
     toast('✅ Saved offline!');
     lib.downloads=lib.downloads.filter(x=>x.videoId!==track.videoId);
     lib.downloads.unshift({...track,offline:true});
     saveLib();updateOfflineBadge();
-  }catch(e){toast('❌ Save failed: '+e.message);}
+    return true;
+  }catch(e){
+    toast('❌ Save failed: '+e.message);
+    return false;
+  }
 }
 async function getOfflineUrl(videoId){
   if(!db)return null;
@@ -1117,40 +1150,45 @@ async function downloadTrack(track){
   const isDeezer=vid.startsWith('dz_');
   const isYT=/^[a-zA-Z0-9_-]{11}$/.test(vid);
   let url=null;
+  let realVid=vid;
 
-  // If currently playing this track, use cached stream
+  // If currently playing this track, use cached stream + resolved id
   if(queue[qIdx]?.videoId===vid&&window._currentStream){
     url=window._currentStream;
+    realVid=track._resolvedVideoId||vid;
   } else if(isDeezer){
     showLoader('🔍 Resolving song...');
     try{
       const params=new URLSearchParams({title:track.title||'',artist:track.artist||''});
       const r=await fetch(`${API}/stream/${vid}?${params}`);
       const d=await r.json();
-      if(d.url)url=d.url;
+      if(d.url){url=d.url;realVid=d.videoId||vid;track._resolvedVideoId=realVid;}
     }catch(e){}
     hideLoader();
   } else if(isYT){
     showLoader('⬇️ Getting download link...');
     url=await getStreamUrl(vid);
+    realVid=vid;
     hideLoader();
   }
 
   if(!url){toast('❌ Could not get download link');return;}
 
-  // Save to IndexedDB for offline playback
+  // Save to IndexedDB for offline playback (uses backend proxy internally)
   toast('⬇️ Saving offline...');
-  await saveOffline(track,url);
+  const saved=await saveOffline(track,url);
 
-  // Also trigger browser download
-  try{
-    const a=document.createElement('a');
-    a.href=url;
-    a.download=`${track.title||'track'}.m4a`;
-    a.target='_blank';
-    document.body.appendChild(a);a.click();
-    document.body.removeChild(a);
-  }catch(e){}
+  // Also trigger browser download via our proxy (avoids CORS/blocked direct links)
+  if(saved&&/^[a-zA-Z0-9_-]{11}$/.test(realVid)){
+    try{
+      const a=document.createElement('a');
+      a.href=`${API}/proxy/${realVid}`;
+      a.download=`${(track.title||'track').replace(/[^\w\s-]/g,'')}.m4a`;
+      a.target='_blank';
+      document.body.appendChild(a);a.click();
+      document.body.removeChild(a);
+    }catch(e){}
+  }
 }
 
 async function dlCurrent(){
