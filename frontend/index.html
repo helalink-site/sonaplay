@@ -374,7 +374,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 <!-- GUEST -->
 <div id="guest">
   <div class="g-bar">
-    <div class="g-logo"><img src="icons/icon-192.png"/><span>Sona</span></div>
+    <div class="g-logo"><img src="icons/logo.svg" onerror="this.src='icons/icon-192.png'"/><span>Sona</span></div>
     <button class="up-btn" onclick="showAuth()">✨ Full Access</button>
   </div>
   <div class="g-body">
@@ -792,9 +792,10 @@ function genreQuery(g){
 
 // Filter out mixes/compilations from results
 function filterSongs(tracks){
-  const mixWords=['mix','compilation','playlist','collection','vol.','vol ','ep ','album','mixtape','best of','nonstop','non-stop','mashup'];
+  const mixWords=['mix','compilation','playlist','collection','vol.','vol ','ep ','album','mixtape','best of','nonstop','non-stop','mashup','discography','full archive'];
   return tracks.filter(t=>{
     const title=(t.title||'').toLowerCase();
+    if(t.source==='archive')return false; // skip low-quality archive junk on home/genre browsing
     return !mixWords.some(w=>title.includes(w));
   });
 }
@@ -1137,7 +1138,7 @@ async function dlCurrent(){
   await downloadTrack(t);
 }
 function updateUI(t){
-  const th=t.thumbnail||'icons/icon-192.png',ti=t.title||'Unknown',ar=t.artist||'Unknown';
+  const th=t.thumbnail||'icons/logo.svg',ti=t.title||'Unknown',ar=t.artist||'Unknown';
   document.getElementById('mthImg').src=th;
   document.getElementById('mTitle').textContent=ti;
   document.getElementById('mArtist').textContent=ar;
@@ -1181,7 +1182,7 @@ audio.addEventListener('timeupdate',()=>{
 });
 audio.addEventListener('loadedmetadata',()=>{if(audio.duration&&!isNaN(audio.duration))document.getElementById('totT').textContent=fmt(audio.duration);});
 audio.addEventListener('ended',()=>{if(rep===1)audio.play();else nextTrack();});
-function setMS(t){if(!('mediaSession' in navigator))return;navigator.mediaSession.metadata=new MediaMetadata({title:t.title||'Unknown',artist:t.artist||'Unknown',artwork:[{src:t.thumbnail||'icons/icon-192.png',sizes:'192x192'}]});navigator.mediaSession.setActionHandler('play',()=>{audio.play();playing=true;updateBtn(true);});navigator.mediaSession.setActionHandler('pause',()=>{audio.pause();playing=false;updateBtn(false);});navigator.mediaSession.setActionHandler('previoustrack',prevTrack);navigator.mediaSession.setActionHandler('nexttrack',nextTrack);}
+function setMS(t){if(!('mediaSession' in navigator))return;navigator.mediaSession.metadata=new MediaMetadata({title:t.title||'Unknown',artist:t.artist||'Unknown',artwork:[{src:t.thumbnail||'icons/logo.svg',sizes:'192x192'}]});navigator.mediaSession.setActionHandler('play',()=>{audio.play();playing=true;updateBtn(true);});navigator.mediaSession.setActionHandler('pause',()=>{audio.pause();playing=false;updateBtn(false);});navigator.mediaSession.setActionHandler('previoustrack',prevTrack);navigator.mediaSession.setActionHandler('nexttrack',nextTrack);}
 
 // LIBRARY
 function setLibTab(el,tab){document.querySelectorAll('.ltab').forEach(t=>t.classList.remove('on'));el.classList.add('on');loadLib(tab);}

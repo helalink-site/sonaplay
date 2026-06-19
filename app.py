@@ -214,10 +214,10 @@ def search_tracks(q,n=10):
     k=hashlib.md5(f'{q}:{n}'.encode()).hexdigest()
     c=cg(k)
     if c: return c
-    # Primary: Invidious (no quota), fallback: YouTube API, last resort: Archive
-    tracks=search_invidious(q,n) or search_yt(q,n) or search_archive(q,n)
+    # Primary: YouTube API (reliable from Render), fallback: Invidious, last resort: Archive
+    tracks=search_yt(q,n) or search_invidious(q,n) or search_archive(q,n)
     tracks=tracks[:n]
-    if tracks: cs(k,tracks,15)  # cache 15min
+    if tracks: cs(k,tracks,120)  # cache 2 hours to save quota
     return tracks
 
 # --- Routes ---
