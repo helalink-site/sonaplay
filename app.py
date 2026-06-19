@@ -198,6 +198,9 @@ def search_yt(q,n=10):
             'part':'snippet','q':q,'type':'video',
             'videoCategoryId':'10','maxResults':n,'key':YT_KEY,
         },timeout=10)
+        if r.status_code!=200:
+            log.error(f'YT API error {r.status_code}: {r.text[:300]}')
+            return []
         tracks=[]
         for i in r.json().get('items',[]):
             vid=i.get('id',{}).get('videoId','')
