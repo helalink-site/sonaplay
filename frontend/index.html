@@ -776,19 +776,30 @@ function updateUserUI(){
 // HOME
 // Genre → proper search terms that return individual songs
 const GENRE_QUERIES={
-  'afrobeats':['Burna Boy official audio','Wizkid official audio','Davido official video'],
-  'bongo':['Diamond Platnumz official video','Rayvanny official video','Harmonize official video'],
-  'hip-hop':['Khaligraph Jones official','Mejja official audio','Nyashinski official'],
-  'pop':['Sauti Sol official','Bien official audio','Otile Brown official'],
-  'gospel':['gospel music Kenya 2026','gospel Tanzania 2026'],
-  'kenya':['Kenyan music official 2026','Kenya bongo official'],
-  'nigeria':['Nigerian afrobeats official 2026'],
-  '':['Diamond Platnumz official video','Burna Boy official audio','Rayvanny official video'],
+  'afrobeats':['Burna Boy official audio','Wizkid official audio','Davido official video','Asake official video','Rema official video'],
+  'bongo':['Diamond Platnumz official video','Rayvanny official video','Harmonize official video','Mbosso official video','Zuchu official video'],
+  'hip-hop':['Khaligraph Jones official','Mejja official audio','Nyashinski official','Bahati official','Otile Brown official'],
+  'pop':['Sauti Sol official','Bien official audio','Nadia Mukami official','Willy Paul official','Femi One official'],
+  'gospel':['gospel music Kenya 2026','gospel Tanzania 2026','Size 8 gospel official','Willy Paul gospel'],
+  'kenya':['Bahati official video','Nadia Mukami official','Khaligraph Jones official','Otile Brown official'],
+  'nigeria':['Burna Boy official audio','Davido official video','Asake official video','Wizkid official audio'],
+  '':['Diamond Platnumz official video','Burna Boy official audio','Rayvanny official video','Harmonize official video','Wizkid official audio','Sauti Sol official'],
 };
 
 function genreQuery(g){
   const queries=GENRE_QUERIES[g]||GENRE_QUERIES[''];
   return queries[Math.floor(Math.random()*queries.length)];
+}
+
+// Pick N distinct random queries from a genre pool (no repeats)
+function genreQueriesMulti(g,n){
+  const pool=[...(GENRE_QUERIES[g]||GENRE_QUERIES[''])];
+  const picked=[];
+  while(picked.length<n&&pool.length){
+    const i=Math.floor(Math.random()*pool.length);
+    picked.push(pool.splice(i,1)[0]);
+  }
+  return picked;
 }
 
 // Filter out mixes/compilations from results
@@ -801,22 +812,53 @@ function filterSongs(tracks){
   });
 }
 
+// Shuffle array (Fisher-Yates)
+function shuffle(arr){
+  const a=[...arr];
+  for(let i=a.length-1;i>0;i--){
+    const j=Math.floor(Math.random()*(i+1));
+    [a[i],a[j]]=[a[j],a[i]];
+  }
+  return a;
+}
+
+// Run multiple searches and blend results (2-3 songs per artist, shuffled)
+async function blendedSearch(queries,perArtist,totalLimit){
+  const results=await Promise.all(
+    queries.map(q=>fetch(`${API}/search?q=${encodeURIComponent(q)}&limit=${perArtist+2}`)
+      .then(r=>r.json()).catch(()=>({tracks:[]})))
+  );
+  let blended=[];
+  results.forEach(d=>{
+    const songs=filterSongs(d.tracks||[]).slice(0,perArtist);
+    blended.push(...songs);
+  });
+  return shuffle(blended).slice(0,totalLimit);
+}
+
 async function loadHome(){
   try{
-    const g=prefs.genres[0]||'';
-    const a=prefs.artists.length?prefs.artists[Math.floor(Math.random()*prefs.artists.length)]:'Diamond Platnumz';
-    const newQ=genreQuery(g);
-    const trendQ=prefs.genres[1]?genreQuery(prefs.genres[1]):genreQuery('bongo');
-    const forYouQ=prefs.artists.length?`${a} official video`:genreQuery('afrobeats');
-    const[r1,r2,r3]=await Promise.all([
-      fetch(`${API}/search?q=${encodeURIComponent(newQ)}&limit=12`),
-      fetch(`${API}/search?q=${encodeURIComponent(trendQ)}&limit=8`),
-      fetch(`${API}/search?q=${encodeURIComponent(forYouQ)}&limit=12`),
+    const primaryGenre=prefs.genres[0]||'';
+    const secondaryGenre=prefs.genres[1]||'afrobeats';
+
+    // New Releases: blend 4 different artists from primary genre
+    const newQueries=genreQueriesMulti(primaryGenre,4);
+    // Trending: blend 4 different artists from secondary genre
+    const trendQueries=genreQueriesMulti(secondaryGenre,4);
+    // For You: blend user's favorite artists, or mix of genres if none set
+    const forYouQueries=prefs.artists.length
+      ? prefs.artists.slice(0,4).map(a=>`${a} official video`)
+      : genreQueriesMulti('',4);
+
+    const[nTracksRaw,trTracksRaw,fyTracksRaw]=await Promise.all([
+      blendedSearch(newQueries,3,8),
+      blendedSearch(trendQueries,2,5),
+      blendedSearch(forYouQueries,3,8),
     ]);
-    const[d1,d2,d3]=await Promise.all([r1.json(),r2.json(),r3.json()]);
-    window.nTracks=filterSongs(d1.tracks||[]).slice(0,8);
-    window.trTracks=filterSongs(d2.tracks||[]).slice(0,5);
-    window.fyTracks=filterSongs(d3.tracks||[]).slice(0,8);
+
+    window.nTracks=nTracksRaw;
+    window.trTracks=trTracksRaw;
+    window.fyTracks=fyTracksRaw;
     renderCards('newRow',nTracks,'nTracks');
     renderTrend(trTracks);
     renderCards('fyRow',fyTracks,'fyTracks');
@@ -984,14 +1026,32 @@ async function saveOffline(track,url){
   if(!db)return false;
   try{
     if(!url)throw new Error('No stream URL to save');
-    // Relay through backend using the URL we ALREADY resolved in-browser
-    // (avoids backend re-discovering stream from blocked datacenter IP)
-    const fetchUrl=`${API}/relay?url=${encodeURIComponent(url)}`;
 
-    const r=await fetch(fetchUrl);
-    if(!r.ok)throw new Error('Fetch failed: '+r.status);
-    const blob=await r.blob();
-    if(!blob||blob.size<1000)throw new Error('Empty or invalid audio data');
+    let blob=null;
+
+    // Method 1: Direct fetch (works for most CDNs, googlevideo URLs are
+    // signed to the browser's session so this is usually allowed)
+    try{
+      const r=await fetch(url,{mode:'cors'});
+      if(r.ok){
+        blob=await r.blob();
+        if(blob.size<1000)blob=null;
+      }
+    }catch(e){/* CORS blocked, try next method */}
+
+    // Method 2: Relay through backend (works for non-Google sources)
+    if(!blob){
+      try{
+        const fetchUrl=`${API}/relay?url=${encodeURIComponent(url)}`;
+        const r2=await fetch(fetchUrl);
+        if(r2.ok){
+          blob=await r2.blob();
+          if(blob.size<1000)blob=null;
+        }
+      }catch(e){}
+    }
+
+    if(!blob)throw new Error('This song cannot be saved offline (source restricts downloads)');
 
     const tx=db.transaction(['tracks','blobs'],'readwrite');
     tx.objectStore('tracks').put({...track,offline:true,savedAt:Date.now()});
@@ -1004,7 +1064,7 @@ async function saveOffline(track,url){
     saveLib();updateOfflineBadge();
     return true;
   }catch(e){
-    toast('❌ Save failed: '+e.message);
+    toast('❌ '+e.message);
     return false;
   }
 }
