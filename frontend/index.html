@@ -360,6 +360,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
   </div>
   <div class="wave-label" id="loaderMsg">Loading...</div>
 </div>
+<input type="file" id="deviceFileInput" accept="audio/*" multiple style="display:none" onchange="handleDeviceFiles(event)"/>
 <div id="optsMenu" class="opts-menu">
   <div class="opts-item" onclick="optsAction('play')"><i class="ph-fill ph-play"></i>Play Now</div>
   <div class="opts-item" onclick="optsAction('queue')"><i class="ph ph-queue"></i>Add to Queue</div>
@@ -577,6 +578,11 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
       </div>
       <div class="sl">App</div>
       <div class="sc">
+        <div class="sr" onclick="openDeviceFilePicker()">
+          <div class="si"><i class="ph ph-folder-simple-plus"></i></div>
+          <div class="sri"><div class="srt">Add Songs from Device</div><div class="srs">Import local audio files</div></div>
+          <i class="ph ph-caret-right" style="color:var(--m)"></i>
+        </div>
         <div class="sr" id="installRow" onclick="installApp()">
           <div class="si"><i class="ph ph-device-mobile"></i></div>
           <div class="sri"><div class="srt">Install Sona</div><div class="srs">Add to home screen</div></div>
@@ -1199,6 +1205,62 @@ async function saveOffline(track,url){
     return false;
   }
 }
+
+// ============ DEVICE FILE IMPORT (local files, no network needed) ============
+function openDeviceFilePicker(){
+  document.getElementById('deviceFileInput').click();
+}
+
+async function handleDeviceFiles(event){
+  const files=Array.from(event.target.files||[]);
+  if(!files.length)return;
+  if(!db)await initDB();
+
+  toast(`⬇️ Importing ${files.length} song${files.length>1?'s':''}...`);
+  let imported=0;
+
+  for(const file of files){
+    try{
+      // Generate stable ID from filename + size (so re-importing same file doesn't duplicate)
+      const id='local_'+btoa(unescape(encodeURIComponent(file.name+file.size))).replace(/[^a-zA-Z0-9]/g,'').slice(0,40);
+
+      // Try to parse "Artist - Title.mp3" pattern, else just use filename
+      let title=file.name.replace(/\.[^/.]+$/,'');
+      let artist='Device File';
+      const dashSplit=title.split(' - ');
+      if(dashSplit.length>=2){artist=dashSplit[0].trim();title=dashSplit.slice(1).join(' - ').trim();}
+
+      const track={
+        videoId:id,
+        title:title||file.name,
+        artist:artist,
+        thumbnail:'icons/icon-192.png',
+        duration:'',
+        source:'local',
+        offline:true,
+        savedAt:Date.now()
+      };
+
+      const tx=db.transaction(['tracks','blobs'],'readwrite');
+      tx.objectStore('tracks').put(track);
+      tx.objectStore('blobs').put({videoId:id,blob:file,type:file.type||'audio/mpeg'});
+      await new Promise(res=>{tx.oncomplete=res;tx.onerror=res;});
+
+      lib.downloads=lib.downloads.filter(x=>x.videoId!==id);
+      lib.downloads.unshift(track);
+      imported++;
+    }catch(e){
+      console.error('Import failed for',file.name,e);
+    }
+  }
+
+  saveLib();
+  updateOfflineBadge();
+  toast(`✅ Imported ${imported} song${imported!==1?'s':''}!`);
+  if(document.getElementById('p-library')?.classList.contains('on'))loadLib('offline');
+
+  event.target.value=''; // reset for re-selection
+}
 async function getOfflineUrl(videoId){
   if(!db)return null;
   return new Promise(res=>{
@@ -1492,11 +1554,12 @@ async function loadLib(tab){
       html+=`<div class="offline-empty">
         <div class="offline-empty-icon">🎵</div>
         <h3>No offline songs yet</h3>
-        <p>Tap the ⋮ menu on any song and choose <strong>Download</strong> to save it for offline play.</p>
-        <button class="offline-empty-btn" onclick="showPage('search')">Find Songs to Download</button>
+        <p>Import audio files already saved on your phone, or download songs while online to play them later.</p>
+        <button class="offline-empty-btn" onclick="openDeviceFilePicker()">📂 Add Songs from Device Files</button>
       </div>`;
     } else {
       window.libQ=tracks;
+      html+=`<div style="text-align:center;margin-bottom:.8rem"><button class="offline-empty-btn" onclick="openDeviceFilePicker()" style="font-size:.78rem;padding:.5rem 1.1rem">📂 Add More from Device</button></div>`;
       html+=`<div class="tlist">${tracks.map((t,i)=>tRow(t,i,'libQ')).join('')}</div>`;
     }
     el.innerHTML=html;
