@@ -50,11 +50,44 @@ COBALT_INSTANCES=[
     'https://co.wuk.sh',
 ]
 
+def try_ytdlp_tv_client(video_id):
+    """Try yt-dlp with the 'tv' player client - yt-dlp's 2026 default for YouTube,
+    designed to work without requiring a PO Token unlike android/web clients."""
+    url=f'https://www.youtube.com/watch?v={video_id}'
+    cmd=[
+        'yt-dlp',
+        '--no-playlist',
+        '-f','bestaudio[ext=m4a]/bestaudio/best',
+        '--get-url',
+        '--no-warnings',
+        '--quiet',
+        '--extractor-args','youtube:player_client=tv',
+    ]
+    if COOKIES_FILE.exists():
+        cmd+=['--cookies',str(COOKIES_FILE)]
+    cmd.append(url)
+    try:
+        result=subprocess.run(cmd,capture_output=True,text=True,timeout=25)
+        stream_url=result.stdout.strip().split('\n')[0]
+        if stream_url and stream_url.startswith('http'):
+            log.info(f'yt-dlp(tv) OK: {video_id}')
+            return stream_url
+        log.warning(f'yt-dlp(tv) no URL for {video_id}: {result.stderr[:200]}')
+    except Exception as e:
+        log.warning(f'yt-dlp(tv) error: {e}')
+    return None
+
 def get_yt_stream(video_id):
-    """Get audio stream via cobalt.tools API"""
+    """Get audio stream - try yt-dlp(tv client) first, then cobalt, then invidious"""
     k=f'yt:{video_id}'
     c=cg(k)
     if c: return c
+
+    # Method 1: yt-dlp with tv client (our own server, our own cookies, current 2026 default)
+    url=try_ytdlp_tv_client(video_id)
+    if url:
+        cs(k,url,50)
+        return url
 
     yt_url=f'https://www.youtube.com/watch?v={video_id}'
     headers={
