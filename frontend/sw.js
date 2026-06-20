@@ -1,12 +1,22 @@
-const CACHE = 'sona-v1';
+const CACHE = 'sona-v2';
 const STATIC = [
   '/', '/index.html', '/manifest.json',
+  '/icons/icon-72.png','/icons/icon-96.png','/icons/icon-128.png',
+  '/icons/icon-144.png','/icons/icon-152.png','/icons/icon-192.png',
+  '/icons/icon-192-maskable.png','/icons/icon-384.png',
+  '/icons/icon-512.png','/icons/icon-512-maskable.png',
+  '/icons/favicon.ico','/icons/favicon-16.png','/icons/favicon-32.png',
+  '/icons/apple-touch-icon.png',
   'https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap',
   'https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css'
 ];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => Promise.all(STATIC.map(url=>c.add(url).catch(()=>{})))) // don't fail install if one asset 404s
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener('activate', e => {

@@ -4,8 +4,8 @@
   "description": "Stream, download and discover music. Your music, always fresh.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0A0A0F",
-  "theme_color": "#6C63FF",
+  "background_color": "#0D0D14",
+  "theme_color": "#A855F7",
   "orientation": "portrait-primary",
   "icons": [
     { "src": "icons/icon-72.png", "sizes": "72x72", "type": "image/png" },

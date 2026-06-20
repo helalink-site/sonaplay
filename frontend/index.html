@@ -261,19 +261,41 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 #toast{position:fixed;top:1rem;left:50%;transform:translateX(-50%) translateY(-80px);background:var(--s2);border:1px solid var(--b);color:var(--t);padding:.62rem 1.1rem;border-radius:50px;font-size:.81rem;font-weight:500;z-index:9999;transition:transform .3s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;box-shadow:0 8px 30px rgba(0,0,0,.3);display:flex;align-items:center;gap:.5rem;}
 #toast.show{transform:translateX(-50%) translateY(0);}
 /* SONA LOADER */
-#sonaLoader{position:fixed;inset:0;background:rgba(10,10,15,.85);backdrop-filter:blur(8px);z-index:8000;display:none;flex-direction:column;align-items:center;justify-content:center;gap:1rem;}
+#sonaLoader{position:fixed;inset:0;background:rgba(10,10,15,.88);backdrop-filter:blur(10px);z-index:8000;display:none;flex-direction:column;align-items:center;justify-content:center;gap:1.1rem;}
 #sonaLoader.show{display:flex;}
-.wave-loader{display:flex;align-items:center;gap:4px;height:40px;}
-.wave-loader span{display:block;width:5px;border-radius:3px;background:var(--g);animation:wave .9s ease-in-out infinite;}
-.wave-loader span:nth-child(1){height:12px;animation-delay:0s;}
-.wave-loader span:nth-child(2){height:28px;animation-delay:.1s;}
-.wave-loader span:nth-child(3){height:40px;animation-delay:.2s;}
-.wave-loader span:nth-child(4){height:28px;animation-delay:.3s;}
-.wave-loader span:nth-child(5){height:18px;animation-delay:.4s;}
-.wave-loader span:nth-child(6){height:32px;animation-delay:.3s;}
-.wave-loader span:nth-child(7){height:22px;animation-delay:.2s;}
-.wave-loader span:nth-child(8){height:14px;animation-delay:.1s;}
-@keyframes wave{0%,100%{transform:scaleY(.4);}50%{transform:scaleY(1);}}
+/* S-DRAW LOADER - the logo draws itself */
+.s-draw-wrap{width:90px;height:90px;position:relative;}
+.s-draw-wrap svg{width:100%;height:100%;}
+.s-draw-path{
+  fill:none;
+  stroke-width:13;
+  stroke-linecap:round;
+  stroke-dasharray:340;
+  stroke-dashoffset:340;
+  animation:sdraw 1.6s cubic-bezier(.65,0,.35,1) infinite;
+}
+.s-draw-glow{
+  fill:none;
+  stroke-width:13;
+  stroke-linecap:round;
+  stroke-dasharray:340;
+  stroke-dashoffset:340;
+  filter:blur(6px);
+  opacity:.7;
+  animation:sdraw 1.6s cubic-bezier(.65,0,.35,1) infinite;
+}
+@keyframes sdraw{
+  0%{stroke-dashoffset:340;opacity:.3;}
+  45%{stroke-dashoffset:0;opacity:1;}
+  70%{stroke-dashoffset:0;opacity:1;}
+  100%{stroke-dashoffset:-340;opacity:.3;}
+}
+.s-draw-dot{
+  position:absolute;width:5px;height:5px;border-radius:50%;
+  background:#67E8F9;box-shadow:0 0 6px #67E8F9;
+  animation:sdot 1.6s ease-in-out infinite;
+}
+@keyframes sdot{0%,100%{opacity:0;}10%,60%{opacity:1;}70%{opacity:0;}}
 .wave-label{color:rgba(255,255,255,.7);font-size:.83rem;font-weight:500;letter-spacing:1px;}
 /* INSTALL BANNER - clean version */
 #ibanner{display:none;position:fixed;bottom:calc(var(--nav) + 72px + var(--safe) + .5rem);left:.7rem;right:.7rem;background:var(--s1);border:1px solid var(--v);border-radius:17px;padding:.8rem 1rem;z-index:300;box-shadow:0 4px 20px rgba(108,99,255,.2);}
@@ -323,7 +345,19 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 <body>
 <div id="toast"></div>
 <div id="sonaLoader">
-  <div class="wave-loader"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+  <div class="s-draw-wrap">
+    <svg viewBox="0 0 100 100">
+      <defs>
+        <linearGradient id="sGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#67E8F9"/>
+          <stop offset="50%" stop-color="#A855F7"/>
+          <stop offset="100%" stop-color="#EC4899"/>
+        </linearGradient>
+      </defs>
+      <path class="s-draw-glow" stroke="url(#sGrad)" d="M68,28 C68,28 38,28 38,42 C38,56 68,50 68,64 C68,78 32,78 32,78"/>
+      <path class="s-draw-path" stroke="url(#sGrad)" d="M68,28 C68,28 38,28 38,42 C38,56 68,50 68,64 C68,78 32,78 32,78"/>
+    </svg>
+  </div>
   <div class="wave-label" id="loaderMsg">Loading...</div>
 </div>
 <div id="optsMenu" class="opts-menu">
@@ -338,7 +372,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 <!-- SPLASH -->
 <div id="splash">
   <div class="sp-glow"></div>
-  <div class="s-logo"><img src="icons/logo.svg" alt="Sona" onerror="this.src='icons/logo.svg'"/></div>
+  <div class="s-logo"><img src="icons/icon-192.png" alt="Sona" onerror="this.src='icons/icon-192.png'"/></div>
   <div class="s-wave"><span></span><span></span><span></span><span></span><span></span></div>
   <div class="s-name">Sona</div>
   <div class="s-sub">Your music, always fresh.</div>
@@ -350,7 +384,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 
 <!-- AUTH -->
 <div id="auth">
-  <div class="a-logo"><img src="icons/logo.svg" alt="Sona" onerror="this.src='icons/icon-192.png'"/></div>
+  <div class="a-logo"><img src="icons/icon-192.png" alt="Sona" onerror="this.src='icons/icon-192.png'"/></div>
   <div class="a-title">Sona</div>
   <div class="a-sub">Sign in for full access to streaming,<br/>downloads & new release alerts.</div>
   <div class="a-card">
@@ -375,7 +409,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 <!-- GUEST -->
 <div id="guest">
   <div class="g-bar">
-    <div class="g-logo"><img src="icons/logo.svg" onerror="this.src='icons/icon-192.png'"/><span>Sona</span></div>
+    <div class="g-logo"><img src="icons/icon-192.png" onerror="this.src='icons/icon-192.png'"/><span>Sona</span></div>
     <button class="up-btn" onclick="showAuth()">✨ Full Access</button>
   </div>
   <div class="g-body">
@@ -399,7 +433,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 <div id="main">
   <header class="topbar">
     <div class="tb-left">
-      <img src="icons/logo.svg" alt="Sona" onerror="this.src='icons/icon-192.png'"/>
+      <img src="icons/icon-192.png" alt="Sona" onerror="this.src='icons/icon-192.png'"/>
       <div class="tb-logo">Sona</div>
     </div>
     <div class="tb-right">
@@ -432,6 +466,22 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
         <div class="card"><div class="card-img"><div class="sk"></div></div></div>
         <div class="card"><div class="card-img"><div class="sk"></div></div></div>
         <div class="card"><div class="card-img"><div class="sk"></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EXPANDED SECTION (See All) -->
+  <div class="page" id="p-expand">
+    <div class="wrap">
+      <div class="sh" style="align-items:center;margin-bottom:.8rem">
+        <div class="sh-t" id="expandTitle" style="font-size:1.3rem">Section</div>
+        <div class="see" onclick="showPage('home')" style="cursor:pointer"><i class="ph ph-arrow-left"></i> Back</div>
+      </div>
+      <div class="tlist" id="expandResults"></div>
+      <div id="expandLoadMoreWrap" style="text-align:center;padding:1.2rem 0;">
+        <button id="expandLoadMoreBtn" onclick="loadMoreExpand()" style="background:var(--s2);border:1px solid var(--b);color:var(--t);padding:.65rem 1.4rem;border-radius:50px;font-family:'Syne',sans-serif;font-weight:700;font-size:.85rem;cursor:pointer;display:inline-flex;align-items:center;gap:.4rem;">
+          Load More <i class="ph ph-arrow-down"></i>
+        </button>
       </div>
     </div>
   </div>
@@ -559,7 +609,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 
 <!-- MINI PLAYER -->
 <div id="mini" onclick="openFP()">
-  <div class="mth"><img id="mthImg" src="" alt="" onerror="this.src='icons/logo.svg'"/></div>
+  <div class="mth"><img id="mthImg" src="" alt="" onerror="this.src='icons/icon-192.png'"/></div>
   <div class="mi"><div class="mt" id="mTitle">Not Playing</div><div class="ma" id="mArtist">—</div></div>
   <div class="mc" onclick="event.stopPropagation()">
     <button class="mb" onclick="prevTrack()"><i class="ph ph-skip-back"></i></button>
@@ -580,7 +630,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
       <button class="fp-hb" onclick="openM('trackModal')"><i class="ph ph-dots-three-outline-vertical"></i></button>
     </div>
     <div class="fp-art" id="fpArt">
-      <img id="fpImg" src="" alt="" onerror="this.src='icons/logo.svg'"/>
+      <img id="fpImg" src="" alt="" onerror="this.src='icons/icon-192.png'"/>
     </div>
     <div class="fp-info">
       <div class="fp-title" id="fpTitle">—</div>
@@ -895,7 +945,7 @@ function renderCards(id,tracks,qn){
   el.innerHTML=tracks.map((t,i)=>`
     <div class="card" onclick='play(${JSON.stringify(t)},window["${qn}"],${i})'>
       <div class="card-img">
-        <img src="${t.thumbnail||''}" loading="lazy" onerror="this.src='icons/logo.svg';this.style.objectFit='cover'"/>
+        <img src="${t.thumbnail||''}" loading="lazy" onerror="this.src='icons/icon-192.png';this.style.objectFit='cover'"/>
         <div class="ov"><i class="ph-fill ph-play"></i></div>
       </div>
       <div class="ct">${t.title||'Unknown'}</div>
@@ -911,36 +961,76 @@ function tRow(t,i,qn){
   const offline=t.offline?'<span class="offline-badge">📱</span>':'';
   return`<div class="trow" onclick='play(${ts},window["${qn}"],${i})'>
     <div class="tn">${i+1}</div>
-    <div class="tth"><img src="${t.thumbnail||''}" loading="lazy" onerror="this.src='icons/logo.svg';this.style.objectFit='cover'"/></div>
+    <div class="tth"><img src="${t.thumbnail||''}" loading="lazy" onerror="this.src='icons/icon-192.png';this.style.objectFit='cover'"/></div>
     <div class="ti"><div class="tt">${t.title||'Unknown'}${offline}</div><div class="ta">${t.artist||''}</div></div>
     <div class="td">${t.duration||''}</div>
     <div class="tm" onclick="event.stopPropagation();openOpts(${ts},window['${qn}'],${i},event)"><i class="ph ph-dots-three-vertical"></i></div>
   </div>`;
 }
+// Expanded section state
+let _expandState={type:null,queries:[],order:'relevance',loadedQueries:0,batchSize:4};
+
 async function seeAll(type){
-  showPage('search');
+  showPage('expand');
   const primaryGenre=prefs.genres[0]||'';
   const secondaryGenre=prefs.genres[1]||'afrobeats';
-  const el=document.getElementById('sResults');
-  document.getElementById('sinput').value='';
-
+  const el=document.getElementById('expandResults');
   el.innerHTML='<div style="text-align:center;padding:1rem;color:var(--m)">Loading...</div>';
+  document.getElementById('expandLoadMoreWrap').style.display='none';
 
-  let queries,order='relevance',label;
+  let allQueries,order='relevance',label;
   if(type==='new'){
-    queries=genreQueriesMulti(primaryGenre,6).map(q=>`${q} 2026 new release`);
+    allQueries=[...(GENRE_QUERIES[primaryGenre]||GENRE_QUERIES[''])].map(q=>`${q} 2026 new release`);
     order='date';
-    label='New Releases';
+    label='🆕 New Releases';
   } else {
-    queries=genreQueriesMulti(secondaryGenre,6);
-    label='Trending';
+    allQueries=[...(GENRE_QUERIES[secondaryGenre]||GENRE_QUERIES[''])];
+    label='🔥 Trending';
   }
 
-  document.getElementById('sinput').placeholder=label;
-  const tracks=await blendedSearch(queries,3,18,order);
-  window.sTracks=tracks;
-  if(!tracks.length){el.innerHTML='<div style="color:var(--m);padding:1rem;text-align:center">No results found</div>';return;}
-  el.innerHTML=tracks.map((t,i)=>tRow(t,i,'sTracks')).join('');
+  // Shuffle query order so repeated visits feel fresh
+  allQueries=shuffle(allQueries);
+
+  _expandState={type,queries:allQueries,order,loadedQueries:0,batchSize:4};
+  document.getElementById('expandTitle').textContent=label;
+
+  window.expandTracks=[];
+  await loadMoreExpand();
+}
+
+async function loadMoreExpand(){
+  const btn=document.getElementById('expandLoadMoreBtn');
+  const wrap=document.getElementById('expandLoadMoreWrap');
+  btn.textContent='Loading...';
+  btn.disabled=true;
+
+  const {queries,order,loadedQueries,batchSize}=_expandState;
+  const batch=queries.slice(loadedQueries,loadedQueries+batchSize);
+
+  if(!batch.length){
+    wrap.style.display='none';
+    return;
+  }
+
+  const newTracks=await blendedSearch(batch,4,batch.length*4,order);
+
+  // Dedupe by videoId against what's already shown
+  const existingIds=new Set((window.expandTracks||[]).map(t=>t.videoId));
+  const deduped=newTracks.filter(t=>!existingIds.has(t.videoId));
+
+  window.expandTracks=[...(window.expandTracks||[]),...deduped];
+  _expandState.loadedQueries+=batchSize;
+
+  const el=document.getElementById('expandResults');
+  if(!window.expandTracks.length){
+    el.innerHTML='<div style="color:var(--m);padding:1rem;text-align:center">No results found</div>';
+  } else {
+    el.innerHTML=window.expandTracks.map((t,i)=>tRow(t,i,'expandTracks')).join('');
+  }
+
+  btn.textContent='Load More';
+  btn.disabled=false;
+  wrap.style.display=_expandState.loadedQueries<queries.length?'block':'none';
 }
 
 // SEARCH
@@ -1182,6 +1272,7 @@ async function play(track,q,idx){
   hideLoader();
 
   if(!streamUrl){
+    removeDeadTrack(track,vid);
     toast('⏭️ Skipping unavailable song...');
     updateBtn(false);
     if(queue.length>1)setTimeout(()=>nextTrack(),800);
@@ -1199,10 +1290,36 @@ async function play(track,q,idx){
     addHist(track);setMS(track);
   }catch(e){
     hideLoader();
+    removeDeadTrack(track,vid);
     toast('⏭️ Skipping unplayable song...');
     updateBtn(false);
     if(queue.length>1)setTimeout(()=>nextTrack(),800);
   }
+}
+
+// Remove a song that failed to play from queue + all visible track lists,
+// so it doesn't show up again this session
+function removeDeadTrack(track,vid){
+  const idx=queue.findIndex(t=>t.videoId===vid);
+  if(idx>=0){
+    queue.splice(idx,1);
+    if(qIdx>idx)qIdx--;
+  }
+  // Remove from all known global track arrays used by home/search/library
+  ['nTracks','trTracks','fyTracks','sTracks','expandTracks','libQ'].forEach(name=>{
+    if(Array.isArray(window[name])){
+      const i=window[name].findIndex(t=>t.videoId===vid);
+      if(i>=0)window[name].splice(i,1);
+    }
+  });
+  // Re-render visible sections so the dead song disappears from the UI
+  if(window.nTracks)renderCards('newRow',nTracks,'nTracks');
+  if(window.fyTracks)renderCards('fyRow',fyTracks,'fyTracks');
+  if(window.trTracks)renderTrend(trTracks);
+  const sEl=document.getElementById('sResults');
+  if(sEl&&window.sTracks)sEl.innerHTML=sTracks.map((t,i)=>tRow(t,i,'sTracks')).join('');
+  const eEl=document.getElementById('expandResults');
+  if(eEl&&window.expandTracks)eEl.innerHTML=expandTracks.map((t,i)=>tRow(t,i,'expandTracks')).join('');
 }
 
 // ============ 3-DOT OPTIONS ============
@@ -1301,7 +1418,7 @@ async function dlCurrent(){
   await downloadTrack(t);
 }
 function updateUI(t){
-  const th=t.thumbnail||'icons/logo.svg',ti=t.title||'Unknown',ar=t.artist||'Unknown';
+  const th=t.thumbnail||'icons/icon-192.png',ti=t.title||'Unknown',ar=t.artist||'Unknown';
   document.getElementById('mthImg').src=th;
   document.getElementById('mTitle').textContent=ti;
   document.getElementById('mArtist').textContent=ar;
@@ -1345,7 +1462,7 @@ audio.addEventListener('timeupdate',()=>{
 });
 audio.addEventListener('loadedmetadata',()=>{if(audio.duration&&!isNaN(audio.duration))document.getElementById('totT').textContent=fmt(audio.duration);});
 audio.addEventListener('ended',()=>{if(rep===1)audio.play();else nextTrack();});
-function setMS(t){if(!('mediaSession' in navigator))return;navigator.mediaSession.metadata=new MediaMetadata({title:t.title||'Unknown',artist:t.artist||'Unknown',artwork:[{src:t.thumbnail||'icons/logo.svg',sizes:'192x192'}]});navigator.mediaSession.setActionHandler('play',()=>{audio.play();playing=true;updateBtn(true);});navigator.mediaSession.setActionHandler('pause',()=>{audio.pause();playing=false;updateBtn(false);});navigator.mediaSession.setActionHandler('previoustrack',prevTrack);navigator.mediaSession.setActionHandler('nexttrack',nextTrack);}
+function setMS(t){if(!('mediaSession' in navigator))return;navigator.mediaSession.metadata=new MediaMetadata({title:t.title||'Unknown',artist:t.artist||'Unknown',artwork:[{src:t.thumbnail||'icons/icon-192.png',sizes:'192x192'}]});navigator.mediaSession.setActionHandler('play',()=>{audio.play();playing=true;updateBtn(true);});navigator.mediaSession.setActionHandler('pause',()=>{audio.pause();playing=false;updateBtn(false);});navigator.mediaSession.setActionHandler('previoustrack',prevTrack);navigator.mediaSession.setActionHandler('nexttrack',nextTrack);}
 
 // LIBRARY
 function setLibTab(el,tab){document.querySelectorAll('.ltab').forEach(t=>t.classList.remove('on'));el.classList.add('on');loadLib(tab);}
@@ -1446,11 +1563,23 @@ function updateSubs(){
 function showPage(name){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
-  document.getElementById('p-'+name).classList.add('on');
-  document.getElementById('n-'+name).classList.add('on');
+  document.getElementById('p-'+name)?.classList.add('on');
+  document.getElementById('n-'+name)?.classList.add('on');
 }
 function toggleNotif(on){if(on)Notification.requestPermission().then(p=>{if(p==='granted')toast('🔔 Notifications on!');else{document.getElementById('notifTog').checked=false;toast('Blocked by browser');}});}
-function installApp(){if(deferredInstall){deferredInstall.prompt();hideIB();}else toast('Browser menu → Add to Home Screen');}
+function installApp(){
+  if(deferredInstall){
+    deferredInstall.prompt();
+    hideIB();
+  } else {
+    const isStandalone=window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+    if(isStandalone){
+      toast('✅ Already installed!');
+    } else {
+      toast('📲 Tap ⋮ menu → "Add to Home screen"');
+    }
+  }
+}
 function showIB(){
   if(deferredInstall&&!localStorage.getItem('ibDismissed'))
     document.getElementById('ibanner').style.display='block';
