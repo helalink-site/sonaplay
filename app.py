@@ -253,12 +253,8 @@ def stream_url(vid):
     else:
         return jsonify({'error':'Not found'}),404
 
-@app.route('/api/proxy/<tid>')
-def proxy(tid):
-    """Proxy audio stream to avoid CORS issues"""
-    url=get_yt_stream(tid)
-    if not url:
-        return jsonify({'error':'No stream available'}),404
+def _relay_stream(url):
+    """Shared logic: fetch a URL server-side and stream bytes to client (avoids CORS)"""
     try:
         hdrs={'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
         rng=request.headers.get('Range')
@@ -274,6 +270,23 @@ def proxy(tid):
         return Response(stream_with_context(gen()),status=r.status_code,headers=rh)
     except Exception as e:
         return jsonify({'error':str(e)}),500
+
+@app.route('/api/relay')
+def relay():
+    """Relay an already-resolved stream URL (browser found it, server just fetches bytes).
+    This avoids re-discovering the stream from Render's blocked IP."""
+    url=request.args.get('url','')
+    if not url or not url.startswith('http'):
+        return jsonify({'error':'Invalid url'}),400
+    return _relay_stream(url)
+
+@app.route('/api/proxy/<tid>')
+def proxy(tid):
+    """Legacy proxy - re-discovers stream server-side (may fail due to IP blocking)"""
+    url=get_yt_stream(tid)
+    if not url:
+        return jsonify({'error':'No stream available'}),404
+    return _relay_stream(url)
 
 @app.route('/api/download/<tid>')
 def download(tid):

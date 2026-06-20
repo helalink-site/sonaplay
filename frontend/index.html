@@ -147,7 +147,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 .tt{font-size:.86rem;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ta{font-size:.74rem;color:var(--m);margin-top:.1rem;}
 .td{font-size:.72rem;color:var(--m);flex-shrink:0;}
-.tm{color:var(--m);font-size:.95rem;flex-shrink:0;padding:.3rem;cursor:pointer;}
+.tm{color:var(--m);font-size:1.1rem;flex-shrink:0;padding:.6rem;cursor:pointer;position:relative;z-index:5;min-width:40px;min-height:40px;display:flex;align-items:center;justify-content:center;border-radius:50%;}
+.tm:active{background:rgba(255,255,255,.08);}
 
 /* SEARCH */
 .sbar{display:flex;align-items:center;gap:.7rem;background:var(--s1);border:1px solid var(--b);border-radius:13px;padding:.72rem .9rem;margin-bottom:.9rem;}
@@ -982,10 +983,10 @@ function initDB(){
 async function saveOffline(track,url){
   if(!db)return false;
   try{
-    // Use backend proxy to avoid CORS issues with googlevideo.com
-    const realVid=track._resolvedVideoId||track.videoId;
-    const isYT=/^[a-zA-Z0-9_-]{11}$/.test(realVid);
-    const fetchUrl=isYT?`${API}/proxy/${realVid}`:url;
+    if(!url)throw new Error('No stream URL to save');
+    // Relay through backend using the URL we ALREADY resolved in-browser
+    // (avoids backend re-discovering stream from blocked datacenter IP)
+    const fetchUrl=`${API}/relay?url=${encodeURIComponent(url)}`;
 
     const r=await fetch(fetchUrl);
     if(!r.ok)throw new Error('Fetch failed: '+r.status);
@@ -1178,11 +1179,11 @@ async function downloadTrack(track){
   toast('⬇️ Saving offline...');
   const saved=await saveOffline(track,url);
 
-  // Also trigger browser download via our proxy (avoids CORS/blocked direct links)
-  if(saved&&/^[a-zA-Z0-9_-]{11}$/.test(realVid)){
+  // Also trigger browser download via relay (uses the URL we already resolved)
+  if(saved){
     try{
       const a=document.createElement('a');
-      a.href=`${API}/proxy/${realVid}`;
+      a.href=`${API}/relay?url=${encodeURIComponent(url)}`;
       a.download=`${(track.title||'track').replace(/[^\w\s-]/g,'')}.m4a`;
       a.target='_blank';
       document.body.appendChild(a);a.click();
