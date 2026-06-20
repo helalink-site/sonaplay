@@ -756,9 +756,25 @@ function playLocal(i){
 function enterMain(){
   guest=false;hide();
   document.getElementById('main').classList.add('show');
-  updateUserUI();buildGrids();restorePrefs();updateSubs();loadLib('liked');loadHome();updateOfflineBadge();
+  updateUserUI();buildGrids();restorePrefs();updateSubs();updateOfflineBadge();
   checkPWA();
+
+  if(!navigator.onLine){
+    // No internet - skip home/network entirely, show offline library directly
+    showOfflineStartup();
+  } else {
+    loadLib('liked');loadHome();
+  }
 }
+
+async function showOfflineStartup(){
+  showPage('library');
+  document.querySelectorAll('.ltab').forEach(t=>t.classList.remove('on'));
+  document.getElementById('offlineTab')?.classList.add('on');
+  await loadLib('offline');
+  toast('📡 No internet — showing your offline songs');
+}
+
 function hide(){
   ['auth','guest','main'].forEach(id=>document.getElementById(id).classList.remove('show'));
 }
@@ -823,9 +839,9 @@ function shuffle(arr){
 }
 
 // Run multiple searches and blend results (2-3 songs per artist, shuffled)
-async function blendedSearch(queries,perArtist,totalLimit){
+async function blendedSearch(queries,perArtist,totalLimit,order='relevance'){
   const results=await Promise.all(
-    queries.map(q=>fetch(`${API}/search?q=${encodeURIComponent(q)}&limit=${perArtist+2}`)
+    queries.map(q=>fetch(`${API}/search?q=${encodeURIComponent(q)}&limit=${perArtist+2}&order=${order}`)
       .then(r=>r.json()).catch(()=>({tracks:[]})))
   );
   let blended=[];
@@ -841,8 +857,8 @@ async function loadHome(){
     const primaryGenre=prefs.genres[0]||'';
     const secondaryGenre=prefs.genres[1]||'afrobeats';
 
-    // New Releases: blend 4 different artists from primary genre
-    const newQueries=genreQueriesMulti(primaryGenre,4);
+    // New Releases: blend 4 different artists from primary genre, force recent year
+    const newQueries=genreQueriesMulti(primaryGenre,4).map(q=>`${q} 2026 new release`);
     // Trending: blend 4 different artists from secondary genre
     const trendQueries=genreQueriesMulti(secondaryGenre,4);
     // For You: blend user's favorite artists, or mix of genres if none set
@@ -851,7 +867,7 @@ async function loadHome(){
       : genreQueriesMulti('',4);
 
     const[nTracksRaw,trTracksRaw,fyTracksRaw]=await Promise.all([
-      blendedSearch(newQueries,3,8),
+      blendedSearch(newQueries,3,8,'date'),
       blendedSearch(trendQueries,2,5),
       blendedSearch(forYouQueries,3,8),
     ]);
@@ -901,31 +917,56 @@ function tRow(t,i,qn){
     <div class="tm" onclick="event.stopPropagation();openOpts(${ts},window['${qn}'],${i},event)"><i class="ph ph-dots-three-vertical"></i></div>
   </div>`;
 }
-function seeAll(type){
+async function seeAll(type){
   showPage('search');
-  const g=prefs.genres[0]||'';
-  let q;
+  const primaryGenre=prefs.genres[0]||'';
+  const secondaryGenre=prefs.genres[1]||'afrobeats';
+  const el=document.getElementById('sResults');
+  document.getElementById('sinput').value='';
+
+  el.innerHTML='<div style="text-align:center;padding:1rem;color:var(--m)">Loading...</div>';
+
+  let queries,order='relevance',label;
   if(type==='new'){
-    q=genreQuery(g)||'Diamond Platnumz official video';
+    queries=genreQueriesMulti(primaryGenre,6).map(q=>`${q} 2026 new release`);
+    order='date';
+    label='New Releases';
   } else {
-    q=genreQuery(prefs.genres[1]||'')||'Burna Boy official audio';
+    queries=genreQueriesMulti(secondaryGenre,6);
+    label='Trending';
   }
-  document.getElementById('sinput').value=q;
-  doSearch(q);
+
+  document.getElementById('sinput').placeholder=label;
+  const tracks=await blendedSearch(queries,3,18,order);
+  window.sTracks=tracks;
+  if(!tracks.length){el.innerHTML='<div style="color:var(--m);padding:1rem;text-align:center">No results found</div>';return;}
+  el.innerHTML=tracks.map((t,i)=>tRow(t,i,'sTracks')).join('');
 }
 
 // SEARCH
 let sTimer,activeChip='';
 function onSearch(v){clearTimeout(sTimer);if(!v.trim()){document.getElementById('sResults').innerHTML='';return;}sTimer=setTimeout(()=>doSearch(v),500);}
 function clearSearch(){document.getElementById('sinput').value='';document.getElementById('sResults').innerHTML='';}
-function setChip(el,g){
+async function setChip(el,g){
   document.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
   el.classList.add('on');
   activeChip=g;
   const typed=document.getElementById('sinput').value.trim();
-  // If user typed something, add genre filter; else use genre-specific artist query
-  const q=typed?`${typed} ${g}`.trim():(g?genreQuery(g):genreQuery(''));
-  if(q){document.getElementById('sinput').value=q;doSearch(q);}
+
+  if(typed){
+    // User has typed something - just append genre as filter keyword
+    doSearch(typed);
+    return;
+  }
+
+  // No typed text - blend multiple artists from this genre for variety
+  const el2=document.getElementById('sResults');
+  el2.innerHTML='<div style="text-align:center;padding:1rem;color:var(--m)">Loading...</div>';
+  const queries=genreQueriesMulti(g,5);
+  const tracks=await blendedSearch(queries,3,15);
+  window.sTracks=tracks;
+  if(!tracks.length){el2.innerHTML='<div style="color:var(--m);padding:1rem;text-align:center">No results found</div>';return;}
+  el2.innerHTML=tracks.map((t,i)=>tRow(t,i,'sTracks')).join('');
 }
 async function doSearch(q){
   const query=activeChip?`${q} ${activeChip}`:q;
@@ -1141,8 +1182,9 @@ async function play(track,q,idx){
   hideLoader();
 
   if(!streamUrl){
-    toast('❌ Song not available right now');
+    toast('⏭️ Skipping unavailable song...');
     updateBtn(false);
+    if(queue.length>1)setTimeout(()=>nextTrack(),800);
     return;
   }
 
@@ -1157,8 +1199,9 @@ async function play(track,q,idx){
     addHist(track);setMS(track);
   }catch(e){
     hideLoader();
-    toast('❌ Playback failed');
+    toast('⏭️ Skipping unplayable song...');
     updateBtn(false);
+    if(queue.length>1)setTimeout(()=>nextTrack(),800);
   }
 }
 
@@ -1361,7 +1404,10 @@ async function updateOfflineBadge(){
 
 // Listen for online/offline changes
 window.addEventListener('online',()=>{toast('🌐 Back online');});
-window.addEventListener('offline',()=>{toast('📱 Offline mode — downloaded songs available');});
+window.addEventListener('offline',()=>{
+  toast('📡 No internet — showing offline songs');
+  showOfflineStartup();
+});
 function addHist(t){lib.history=[t,...lib.history.filter(x=>x.videoId!==t.videoId)].slice(0,50);saveLib();}
 function toggleLike(){
   const t=queue[qIdx];if(!t)return;

@@ -149,13 +149,13 @@ def search_invidious(q,n=10):
             continue
     return []
 
-def search_yt(q,n=10):
+def search_yt(q,n=10,order='relevance'):
     """Fallback: YouTube Data API (quota limited)"""
     if not YT_KEY: return []
     try:
         r=requests.get('https://www.googleapis.com/youtube/v3/search',params={
             'part':'snippet','q':q,'type':'video',
-            'videoCategoryId':'10','maxResults':n,'key':YT_KEY,
+            'videoCategoryId':'10','maxResults':n,'key':YT_KEY,'order':order,
         },timeout=10)
         if r.status_code!=200:
             log.error(f'YT API error {r.status_code}: {r.text[:300]}')
@@ -202,12 +202,12 @@ def search_deezer(q,n=10):
         log.warning(f'Deezer search failed: {e}')
         return []
 
-def search_tracks(q,n=10):
-    k=hashlib.md5(f'{q}:{n}'.encode()).hexdigest()
+def search_tracks(q,n=10,order='relevance'):
+    k=hashlib.md5(f'{q}:{n}:{order}'.encode()).hexdigest()
     c=cg(k)
     if c: return c
     # YouTube API primary, Invidious 2nd, Deezer 3rd (metadata only, resolved on play)
-    tracks=search_yt(q,n) or search_invidious(q,n) or search_deezer(q,n)
+    tracks=search_yt(q,n,order) or search_invidious(q,n) or search_deezer(q,n)
     tracks=tracks[:n]
     if tracks: cs(k,tracks,120)  # cache 2 hours to save quota
     return tracks
@@ -222,8 +222,9 @@ def health():
 def search():
     q=request.args.get('q','').strip()
     n=min(int(request.args.get('limit',10)),20)
+    order=request.args.get('order','relevance')  # 'date' for newest first
     if not q: return jsonify({'tracks':[],'error':'Query required'}),400
-    tracks=search_tracks(q,n)
+    tracks=search_tracks(q,n,order)
     return jsonify({'tracks':tracks,'count':len(tracks)})
 
 @app.route('/api/stream/<vid>')
