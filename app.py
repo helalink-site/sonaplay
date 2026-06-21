@@ -57,7 +57,7 @@ def try_ytdlp_tv_client(video_id):
     cmd=[
         'yt-dlp',
         '--no-playlist',
-        '-f','bestaudio[ext=m4a]/bestaudio/best',
+        '-f','bestaudio/best[height<=480]/best',
         '--get-url',
         '--no-warnings',
         '--quiet',
@@ -250,6 +250,20 @@ def search_tracks(q,n=10,order='relevance'):
 def health():
     has_cookies=COOKIES_FILE.exists()
     return jsonify({'status':'ok','cookies':has_cookies,'source':'youtube+invidious'})
+
+@app.route('/api/debug/formats/<vid>')
+def debug_formats(vid):
+    """Debug: list all formats yt-dlp's tv client can see for a video"""
+    url=f'https://www.youtube.com/watch?v={vid}'
+    cmd=['yt-dlp','--no-playlist','-F','--no-warnings','--extractor-args','youtube:player_client=tv']
+    if COOKIES_FILE.exists():
+        cmd+=['--cookies',str(COOKIES_FILE)]
+    cmd.append(url)
+    try:
+        result=subprocess.run(cmd,capture_output=True,text=True,timeout=25)
+        return jsonify({'stdout':result.stdout,'stderr':result.stderr})
+    except Exception as e:
+        return jsonify({'error':str(e)})
 
 @app.route('/api/search')
 def search():
