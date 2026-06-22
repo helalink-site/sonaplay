@@ -17,19 +17,33 @@ _cache={}
 
 # --- Cookies setup ---
 # Cookies can be set via YOUTUBE_COOKIES_B64 env var (base64 of cookies.txt)
-# or by placing cookies.txt in the project root
-COOKIES_FILE=Path(os.getenv('COOKIES_PATH','/etc/secrets/cookies.txt'))
+# or by placing cookies.txt in the project root or Render Secret Files (/etc/secrets/)
+SOURCE_COOKIES_FILE=Path(os.getenv('COOKIES_PATH','/etc/secrets/cookies.txt'))
+COOKIES_FILE=Path('/tmp/cookies_writable.txt')  # yt-dlp needs to WRITE here, secrets dir is read-only
 
 def ensure_cookies():
-    """Load cookies from env var if file doesn't exist"""
+    """Set up a writable cookies file for yt-dlp.
+    yt-dlp tries to save updated cookies back to the file after each run;
+    Render's /etc/secrets/ mount is read-only, which crashes yt-dlp.
+    So we copy the source cookies into /tmp (writable) on startup."""
     b64=os.getenv('YOUTUBE_COOKIES_B64','')
+
+    if SOURCE_COOKIES_FILE.exists():
+        try:
+            COOKIES_FILE.write_bytes(SOURCE_COOKIES_FILE.read_bytes())
+            log.info('Cookies copied from secret file to writable /tmp location')
+            return True
+        except Exception as e:
+            log.error(f'Cookie copy error: {e}')
+
     if b64 and not COOKIES_FILE.exists():
         import base64
         try:
             COOKIES_FILE.write_bytes(base64.b64decode(b64))
-            log.info('Cookies loaded from env var')
+            log.info('Cookies loaded from env var to /tmp')
         except Exception as e:
             log.error(f'Cookie decode error: {e}')
+
     return COOKIES_FILE.exists()
 
 ensure_cookies()
