@@ -174,7 +174,11 @@ def get_yt_stream_url(video_id):
             'no_warnings': True,
             'noplaylist': True,
             'extract_flat': False,
+            'http_headers': {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'},
         }
+        cookies_path = Path('cookies.txt')
+        if cookies_path.exists():
+            ydl_opts['cookiefile'] = str(cookies_path)
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f'https://www.youtube.com/watch?v={video_id}', download=False)
             url = info.get('url', '')
