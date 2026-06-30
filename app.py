@@ -1,379 +1,287 @@
-import os,json,hashlib,re,logging,subprocess,tempfile
+import os, json, hashlib, re, subprocess, logging, random, time
 from pathlib import Path
-from datetime import datetime,timedelta
-from flask import Flask,request,jsonify,send_file,Response,stream_with_context
+from datetime import datetime, timedelta
+from flask import Flask, request, jsonify, send_file, Response, stream_with_context
 from flask_cors import CORS
 import requests
+import yt_dlp
 
 logging.basicConfig(level=logging.INFO)
-log=logging.getLogger('sona')
-app=Flask(__name__)
-CORS(app,origins=['*'])
-CACHE_DIR=Path(os.getenv('CACHE_DIR','/tmp/sona_cache'))
-PORT=int(os.getenv('PORT',5000))
-YT_KEY=os.getenv('YOUTUBE_API_KEY','')
-CACHE_DIR.mkdir(parents=True,exist_ok=True)
-_cache={}
+log = logging.getLogger('sona')
+app = Flask(__name__)
+CORS(app, origins=['*'])
+CACHE_DIR = Path(os.getenv('CACHE_DIR', '/tmp/sona_cache'))
+PORT = int(os.getenv('PORT', 5000))
+YT_API_KEY = os.getenv('YOUTUBE_API_KEY', '')
+SC_CLIENT_ID = os.getenv('SC_CLIENT_ID', '')
+CACHE_DIR.mkdir(parents=True, exist_ok=True)
+_cache = {}
+_sc_client_id = SC_CLIENT_ID or None
 
-# --- Cookies setup ---
-# Cookies can be set via YOUTUBE_COOKIES_B64 env var (base64 of cookies.txt)
-# or by placing cookies.txt in the project root or Render Secret Files (/etc/secrets/)
-SOURCE_COOKIES_FILE=Path(os.getenv('COOKIES_PATH','/etc/secrets/cookies.txt'))
-COOKIES_FILE=Path('/tmp/cookies_writable.txt')  # yt-dlp needs to WRITE here, secrets dir is read-only
-
-def ensure_cookies():
-    """Set up a writable cookies file for yt-dlp.
-    yt-dlp tries to save updated cookies back to the file after each run;
-    Render's /etc/secrets/ mount is read-only, which crashes yt-dlp.
-    So we copy the source cookies into /tmp (writable) on startup."""
-    b64=os.getenv('YOUTUBE_COOKIES_B64','')
-
-    if SOURCE_COOKIES_FILE.exists():
-        try:
-            COOKIES_FILE.write_bytes(SOURCE_COOKIES_FILE.read_bytes())
-            log.info('Cookies copied from secret file to writable /tmp location')
-            return True
-        except Exception as e:
-            log.error(f'Cookie copy error: {e}')
-
-    if b64 and not COOKIES_FILE.exists():
-        import base64
-        try:
-            COOKIES_FILE.write_bytes(base64.b64decode(b64))
-            log.info('Cookies loaded from env var to /tmp')
-        except Exception as e:
-            log.error(f'Cookie decode error: {e}')
-
-    return COOKIES_FILE.exists()
-
-ensure_cookies()
-
-def cg(k):
-    if k in _cache:
-        d,e=_cache[k]
-        if datetime.now()<e: return d
-        del _cache[k]
-
-def cs(k,d,m=30):
-    _cache[k]=(d,datetime.now()+timedelta(minutes=m))
-
-# --- yt-dlp stream extraction ---
-# Working stream sources in 2026
-COBALT_INSTANCES=[
-    'https://cobalt.tools',
-    'https://co.wuk.sh',
-]
-
-def try_ytdlp_tv_client(video_id):
-    """Try yt-dlp with the 'tv' player client - yt-dlp's 2026 default for YouTube,
-    designed to work without requiring a PO Token unlike android/web clients."""
-    url=f'https://www.youtube.com/watch?v={video_id}'
-    cmd=[
-        'yt-dlp',
-        '--no-playlist',
-        '-f','bestaudio/best[height<=480]/best',
-        '--get-url',
-        '--no-warnings',
-        '--quiet',
-        '--extractor-args','youtube:player_client=tv',
-    ]
-    if COOKIES_FILE.exists():
-        cmd+=['--cookies',str(COOKIES_FILE)]
-    cmd.append(url)
-    try:
-        result=subprocess.run(cmd,capture_output=True,text=True,timeout=25)
-        stream_url=result.stdout.strip().split('\n')[0]
-        if stream_url and stream_url.startswith('http'):
-            log.info(f'yt-dlp(tv) OK: {video_id}')
-            return stream_url
-        log.warning(f'yt-dlp(tv) no URL for {video_id}: {result.stderr[:200]}')
-    except Exception as e:
-        log.warning(f'yt-dlp(tv) error: {e}')
+def cache_get(key):
+    if key in _cache:
+        data, exp = _cache[key]
+        if datetime.now() < exp: return data
+        del _cache[key]
     return None
 
-def get_yt_stream(video_id):
-    """Get audio stream - try yt-dlp(tv client) first, then cobalt, then invidious"""
-    k=f'yt:{video_id}'
-    c=cg(k)
-    if c: return c
+def cache_set(key, data, mins=30):
+    _cache[key] = (data, datetime.now() + timedelta(minutes=mins))
 
-    # Method 1: yt-dlp with tv client (our own server, our own cookies, current 2026 default)
-    url=try_ytdlp_tv_client(video_id)
-    if url:
-        cs(k,url,50)
-        return url
-
-    yt_url=f'https://www.youtube.com/watch?v={video_id}'
-    headers={
-        'Accept':'application/json',
-        'Content-Type':'application/json',
-        'User-Agent':'Mozilla/5.0'
-    }
-
-    for base in COBALT_INSTANCES:
-        try:
-            r=requests.post(f'{base}/api/json',
-                json={'url':yt_url,'isAudioOnly':True,'aFormat':'mp3','filenamePattern':'basic'},
-                headers=headers,timeout=15)
-            if r.status_code!=200:
-                log.warning(f'Cobalt {base} status {r.status_code}')
-                continue
-            data=r.json()
-            status=data.get('status','')
-            url=data.get('url','')
-            if status in ('stream','redirect','tunnel') and url:
-                cs(k,url,50)
-                log.info(f'Cobalt OK: {video_id} via {base}')
-                return url
-            log.warning(f'Cobalt {base} bad status: {status} data:{str(data)[:100]}')
-        except Exception as e:
-            log.warning(f'Cobalt {base} error: {e}')
-            continue
-
-    # Last resort: try inv.nadeko.net (currently one of few working invidious)
+# ── SOUNDCLOUD CLIENT ID ──────────────────────────────────────────────────────
+def get_sc_client_id():
+    global _sc_client_id
+    if _sc_client_id: return _sc_client_id
     try:
-        r=requests.get(f'https://inv.nadeko.net/api/v1/videos/{video_id}',
-            params={'fields':'adaptiveFormats'},
-            headers={'User-Agent':'Mozilla/5.0'},timeout=12)
-        if r.status_code==200:
-            formats=r.json().get('adaptiveFormats',[])
-            audio=[f for f in formats if 'audio' in f.get('type','') and 'video' not in f.get('type','')]
-            if audio:
-                best=sorted(audio,key=lambda x:int(x.get('bitrate',0)),reverse=True)
-                url=best[0].get('url','')
-                if url:
-                    cs(k,url,40)
-                    log.info(f'Nadeko OK: {video_id}')
-                    return url
+        r = requests.get('https://soundcloud.com', timeout=10,
+                        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'})
+        # Find JS files
+        js_urls = re.findall(r'https://a-v2\.sndcdn\.com/assets/[^"]+\.js', r.text)
+        for js_url in js_urls[:5]:
+            js = requests.get(js_url, timeout=10).text
+            match = re.search(r'client_id:"([a-zA-Z0-9]{32})"', js)
+            if match:
+                _sc_client_id = match.group(1)
+                log.info(f'SoundCloud client_id: {_sc_client_id}')
+                return _sc_client_id
     except Exception as e:
-        log.warning(f'Nadeko failed: {e}')
-
-    log.error(f'All stream sources failed for {video_id}')
-    return ''
-
-# Archive.org removed — was returning irrelevant junk results
-
-INV_SEARCH_INSTANCES=[
-    'https://inv.nadeko.net',
-    'https://inv.thepixora.com',
-    'https://invidious.nerdvpn.de',
-    'https://invidious.privacyredirect.com',
-    'https://iv.datura.network',
-]
-
-def search_invidious(q,n=10):
-    """Search via Invidious - no API key, no quota limits"""
-    for base in INV_SEARCH_INSTANCES:
+        log.error(f'SC client_id error: {e}')
+    # Known working fallbacks
+    for cid in ['iZIs9mchVcX5lhVRyQGGAYlNPVldzAoX', 'a3e059563d7fd3372b49b37f00a00bcf']:
         try:
-            r=requests.get(f'{base}/api/v1/search',params={
-                'q':q,'type':'video',
-            },timeout=8)
-            if r.status_code!=200: continue
-            items=r.json()
-            tracks=[]
-            for i in items:
-                vid=i.get('videoId','')
-                if not vid: continue
-                thumbs=i.get('videoThumbnails',[])
-                thumb=''
-                if thumbs:
-                    high=[t for t in thumbs if t.get('quality')=='high']
-                    thumb=(high[0] if high else thumbs[0]).get('url','')
-                if thumb and thumb.startswith('/'):
-                    thumb=f'https://img.youtube.com/vi/{vid}/mqdefault.jpg'
-                dur=i.get('lengthSeconds',0)
-                dur_str=f'{dur//60}:{dur%60:02d}' if dur else ''
-                tracks.append({'videoId':vid,'title':i.get('title','Unknown'),
-                    'artist':i.get('author','Unknown'),
-                    'thumbnail':thumb or f'https://img.youtube.com/vi/{vid}/mqdefault.jpg',
-                    'duration':dur_str,'url':f'https://youtube.com/watch?v={vid}','source':'youtube'})
-                if len(tracks)>=n: break
-            if tracks:
-                log.info(f'Invidious search OK via {base}: {len(tracks)} results')
-                return tracks
-        except Exception as e:
-            log.warning(f'Invidious search {base} failed: {e}')
-            continue
-    return []
+            r = requests.get(f'https://api-v2.soundcloud.com/search?q=test&limit=1&client_id={cid}', timeout=5)
+            if r.status_code == 200:
+                _sc_client_id = cid
+                return cid
+        except: pass
+    return None
 
-def search_yt(q,n=10,order='relevance'):
-    """Fallback: YouTube Data API (quota limited)"""
-    if not YT_KEY: return []
+# ── SEARCH ────────────────────────────────────────────────────────────────────
+def search_soundcloud(query, limit=10):
+    cid = get_sc_client_id()
+    if not cid: return []
     try:
-        r=requests.get('https://www.googleapis.com/youtube/v3/search',params={
-            'part':'snippet','q':q,'type':'video',
-            'videoCategoryId':'10','maxResults':n,'key':YT_KEY,'order':order,
-        },timeout=10)
-        if r.status_code!=200:
-            log.error(f'YT API error {r.status_code}: {r.text[:300]}')
+        r = requests.get('https://api-v2.soundcloud.com/search/tracks', params={
+            'q': query, 'limit': limit, 'client_id': cid,
+            'filter.duration': 'medium',
+        }, timeout=10, headers={'User-Agent': 'Mozilla/5.0'})
+        if r.status_code == 401:
+            global _sc_client_id
+            _sc_client_id = None
             return []
-        tracks=[]
-        for i in r.json().get('items',[]):
-            vid=i.get('id',{}).get('videoId','')
-            if not vid: continue
-            sn=i.get('snippet',{})
-            tracks.append({'videoId':vid,'title':sn.get('title','Unknown'),
-                'artist':sn.get('channelTitle','Unknown').replace(' - Topic',''),
-                'thumbnail':sn.get('thumbnails',{}).get('high',{}).get('url',f'https://img.youtube.com/vi/{vid}/mqdefault.jpg'),
-                'duration':'','url':f'https://youtube.com/watch?v={vid}','source':'youtube'})
-        return tracks
-    except: return []
-
-def search_deezer(q,n=10):
-    """Deezer search - no API key needed, reliable fallback.
-    Returns Deezer track data; we tag source as 'deezer' so frontend
-    knows to resolve a YouTube video ID before streaming."""
-    try:
-        r=requests.get('https://api.deezer.com/search',params={'q':q,'limit':n},timeout=8)
-        if r.status_code!=200: return []
-        items=r.json().get('data',[])
-        tracks=[]
-        for i in items:
-            title=i.get('title','Unknown')
-            artist=i.get('artist',{}).get('name','Unknown')
-            cover=i.get('album',{}).get('cover_big') or i.get('album',{}).get('cover_medium','')
-            dur=i.get('duration',0)
-            dur_str=f'{dur//60}:{dur%60:02d}' if dur else ''
-            # No real videoId yet - frontend/backend will resolve via search when played
+        items = r.json().get('collection', [])
+        tracks = []
+        for item in items:
+            if item.get('policy') == 'BLOCK': continue
+            dur = item.get('duration', 0) // 1000
+            mm, ss = divmod(dur, 60)
+            thumb = item.get('artwork_url', '') or item.get('user', {}).get('avatar_url', '')
+            if thumb: thumb = thumb.replace('large', 't500x500')
             tracks.append({
-                'videoId':f'dz_{i.get("id","")}',  # marker prefix, resolved later
-                'title':title,'artist':artist,
-                'thumbnail':cover or '',
-                'duration':dur_str,
-                'url':i.get('link',''),
-                'source':'deezer',
-                'searchQuery':f'{title} {artist}'  # used to resolve real YT id on play
+                'videoId': str(item.get('id', '')),
+                'title': item.get('title', 'Unknown'),
+                'artist': item.get('user', {}).get('username', 'Unknown'),
+                'thumbnail': thumb,
+                'duration': f'{mm}:{ss:02d}' if dur else '',
+                'url': item.get('permalink_url', ''),
+                'streamUrl': item.get('stream_url', ''),
+                'source': 'soundcloud',
             })
         return tracks
     except Exception as e:
-        log.warning(f'Deezer search failed: {e}')
+        log.error(f'SC search error: {e}')
         return []
 
-def search_tracks(q,n=10,order='relevance'):
-    k=hashlib.md5(f'{q}:{n}:{order}'.encode()).hexdigest()
-    c=cg(k)
-    if c: return c
-    # YouTube API primary, Invidious 2nd, Deezer 3rd (metadata only, resolved on play)
-    tracks=search_yt(q,n,order) or search_invidious(q,n) or search_deezer(q,n)
-    tracks=tracks[:n]
-    if tracks: cs(k,tracks,120)  # cache 2 hours to save quota
+def search_tracks(query, limit=10):
+    key = hashlib.md5(f'sc:{query}:{limit}'.encode()).hexdigest()
+    cached = cache_get(key)
+    if cached: return cached
+
+    # 1. SoundCloud
+    tracks = search_soundcloud(query, limit)
+
+    # 2. YouTube API fallback if SC empty
+    if not tracks and YT_API_KEY:
+        try:
+            r = requests.get('https://www.googleapis.com/youtube/v3/search', params={
+                'part': 'snippet', 'q': query, 'type': 'video',
+                'videoCategoryId': '10', 'maxResults': limit, 'key': YT_API_KEY,
+            }, timeout=10)
+            items = r.json().get('items', [])
+            ids = ','.join([i['id']['videoId'] for i in items if i.get('id', {}).get('videoId')])
+            dur_map = {}
+            if ids:
+                vr = requests.get('https://www.googleapis.com/youtube/v3/videos', params={
+                    'part': 'contentDetails', 'id': ids, 'key': YT_API_KEY,
+                }, timeout=10)
+                for v in vr.json().get('items', []):
+                    m = re.match(r'PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?',
+                                 v.get('contentDetails', {}).get('duration', ''))
+                    if m:
+                        h, mn, s = (int(x or 0) for x in m.groups())
+                        total = h*3600 + mn*60 + s
+                        mm2, ss2 = divmod(total, 60)
+                        dur_map[v['id']] = f'{mm2}:{ss2:02d}'
+            for item in items:
+                vid = item.get('id', {}).get('videoId', '')
+                if not vid: continue
+                sn = item.get('snippet', {})
+                tracks.append({
+                    'videoId': f'yt:{vid}', 'title': sn.get('title', 'Unknown'),
+                    'artist': sn.get('channelTitle', 'Unknown').replace(' - Topic', ''),
+                    'thumbnail': sn.get('thumbnails', {}).get('high', {}).get('url', f'https://img.youtube.com/vi/{vid}/mqdefault.jpg'),
+                    'duration': dur_map.get(vid, ''), 'url': f'https://youtube.com/watch?v={vid}',
+                    'source': 'youtube',
+                })
+        except Exception as e:
+            log.error(f'YT search error: {e}')
+
+    if tracks: cache_set(key, tracks)
     return tracks
 
-# --- Routes ---
+# ── STREAM ────────────────────────────────────────────────────────────────────
+def get_sc_stream_url(track_id):
+    cid = get_sc_client_id()
+    if not cid: return ''
+    try:
+        # Get track info
+        r = requests.get(f'https://api-v2.soundcloud.com/tracks/{track_id}',
+                        params={'client_id': cid}, timeout=10)
+        track = r.json()
+        # Get progressive stream URL
+        media = track.get('media', {}).get('transcodings', [])
+        progressive = [m for m in media if m.get('format', {}).get('protocol') == 'progressive']
+        if not progressive:
+            progressive = media  # fallback to any
+        if not progressive: return ''
+        stream_url = progressive[0].get('url', '')
+        if not stream_url: return ''
+        # Resolve stream URL
+        r2 = requests.get(stream_url, params={'client_id': cid}, timeout=10)
+        return r2.json().get('url', '')
+    except Exception as e:
+        log.error(f'SC stream error: {e}')
+        return ''
+
+def get_yt_stream_url(video_id):
+    key = f'yt_stream:{video_id}'
+    cached = cache_get(key)
+    if cached: return cached
+    try:
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'quiet': True,
+            'no_warnings': True,
+            'noplaylist': True,
+            'extract_flat': False,
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(f'https://www.youtube.com/watch?v={video_id}', download=False)
+            url = info.get('url', '')
+            if url:
+                cache_set(key, url, mins=5)  # YT urls expire fast, keep cache short
+            return url
+    except Exception as e:
+        log.error(f'yt-dlp stream error: {e}')
+        return ''
+
+# ── ROUTES ────────────────────────────────────────────────────────────────────
 @app.route('/api/health')
 def health():
-    has_cookies=COOKIES_FILE.exists()
-    return jsonify({'status':'ok','cookies':has_cookies,'source':'youtube+invidious'})
-
-@app.route('/api/debug/formats/<vid>')
-def debug_formats(vid):
-    """Debug: list all formats yt-dlp's tv client can see for a video"""
-    url=f'https://www.youtube.com/watch?v={vid}'
-    cmd=['yt-dlp','--no-playlist','-F','--no-warnings','--extractor-args','youtube:player_client=tv']
-    if COOKIES_FILE.exists():
-        cmd+=['--cookies',str(COOKIES_FILE)]
-    cmd.append(url)
-    try:
-        result=subprocess.run(cmd,capture_output=True,text=True,timeout=25)
-        return jsonify({'stdout':result.stdout,'stderr':result.stderr})
-    except Exception as e:
-        return jsonify({'error':str(e)})
+    cid = get_sc_client_id()
+    return jsonify({'status': 'ok', 'service': 'Sona', 'sc_ready': bool(cid)})
 
 @app.route('/api/search')
 def search():
-    q=request.args.get('q','').strip()
-    n=min(int(request.args.get('limit',10)),20)
-    order=request.args.get('order','relevance')  # 'date' for newest first
-    if not q: return jsonify({'tracks':[],'error':'Query required'}),400
-    tracks=search_tracks(q,n,order)
-    return jsonify({'tracks':tracks,'count':len(tracks)})
+    q = request.args.get('q', '').strip()
+    limit = min(int(request.args.get('limit', 10)), 20)
+    if not q: return jsonify({'tracks': [], 'error': 'Query required'}), 400
+    tracks = search_tracks(q, limit)
+    return jsonify({'tracks': tracks, 'query': q, 'count': len(tracks)})
 
-@app.route('/api/stream/<vid>')
-def stream_url(vid):
-    """Get streamable audio URL for a YouTube video ID, or resolve Deezer marker first"""
-    # Deezer track marker - need to resolve real YouTube video ID first
-    if vid.startswith('dz_'):
-        query=request.args.get('title','')+' '+request.args.get('artist','')
-        query=query.strip()
-        if not query:
-            return jsonify({'error':'Cannot resolve - missing title/artist'}),400
-        resolved=search_yt(query,3) or search_invidious(query,3)
-        if not resolved:
-            return jsonify({'error':'Could not find matching song'}),404
-        real_vid=resolved[0]['videoId']
-        url=get_yt_stream(real_vid)
-        if url:
-            return jsonify({'url':url,'source':'youtube','resolvedFrom':'deezer','videoId':real_vid})
-        return jsonify({'error':'No stream available'}),404
-
-    is_yt=bool(re.match(r'^[a-zA-Z0-9_-]{11}$',vid))
-    if is_yt:
-        url=get_yt_stream(vid)
-        if url:
-            return jsonify({'url':url,'source':'youtube'})
-        return jsonify({'error':'No stream available'}),404
-    else:
-        return jsonify({'error':'Not found'}),404
-
-def _relay_stream(url):
-    """Shared logic: fetch a URL server-side and stream bytes to client (avoids CORS)"""
+@app.route('/api/stream/<track_id>')
+def stream(track_id):
     try:
-        hdrs={'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        rng=request.headers.get('Range')
-        if rng: hdrs['Range']=rng
-        r=requests.get(url,headers=hdrs,stream=True,timeout=30)
-        ct=r.headers.get('Content-Type','audio/mp4')
-        def gen():
-            for chunk in r.iter_content(16384):
-                if chunk: yield chunk
-        rh={'Content-Type':ct,'Accept-Ranges':'bytes','Access-Control-Allow-Origin':'*'}
-        if 'Content-Length' in r.headers: rh['Content-Length']=r.headers['Content-Length']
-        if 'Content-Range' in r.headers: rh['Content-Range']=r.headers['Content-Range']
-        return Response(stream_with_context(gen()),status=r.status_code,headers=rh)
+        if track_id.startswith('yt:'):
+            url = get_yt_stream_url(track_id[3:])
+        else:
+            url = get_sc_stream_url(track_id)
+        if not url:
+            return jsonify({'error': 'Could not get stream URL'}), 404
+        return jsonify({'url': url, 'trackId': track_id})
     except Exception as e:
-        return jsonify({'error':str(e)}),500
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/relay')
-def relay():
-    """Relay an already-resolved stream URL (browser found it, server just fetches bytes).
-    This avoids re-discovering the stream from Render's blocked IP."""
-    url=request.args.get('url','')
-    if not url or not url.startswith('http'):
-        return jsonify({'error':'Invalid url'}),400
-    return _relay_stream(url)
+@app.route('/api/proxy/<track_id>')
+def proxy(track_id):
+    try:
+        if track_id.startswith('yt:'):
+            url = get_yt_stream_url(track_id[3:])
+        else:
+            url = get_sc_stream_url(track_id)
+        if not url:
+            return jsonify({'error': 'No stream URL'}), 404
+        range_header = request.headers.get('Range')
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        if range_header: headers['Range'] = range_header
+        r = requests.get(url, headers=headers, stream=True, timeout=30)
+        def generate():
+            for chunk in r.iter_content(chunk_size=16384):
+                if chunk: yield chunk
+        resp_headers = {
+            'Content-Type': r.headers.get('Content-Type', 'audio/mpeg'),
+            'Accept-Ranges': 'bytes',
+            'Access-Control-Allow-Origin': '*',
+        }
+        if 'Content-Length' in r.headers: resp_headers['Content-Length'] = r.headers['Content-Length']
+        if 'Content-Range' in r.headers: resp_headers['Content-Range'] = r.headers['Content-Range']
+        return Response(stream_with_context(generate()),
+                       status=r.status_code if r.status_code in [200,206] else 200,
+                       headers=resp_headers)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/proxy/<tid>')
-def proxy(tid):
-    """Legacy proxy - re-discovers stream server-side (may fail due to IP blocking)"""
-    url=get_yt_stream(tid)
-    if not url:
-        return jsonify({'error':'No stream available'}),404
-    return _relay_stream(url)
-
-@app.route('/api/download/<tid>')
-def download(tid):
-    url=get_yt_stream(tid)
-    if not url: return jsonify({'error':'Not available'}),404
-    title=re.sub(r'[^\w\s-]','',request.args.get('title',tid))[:50]
-    out=CACHE_DIR/f'{tid}.mp3'
+@app.route('/api/download/<track_id>')
+def download(track_id):
+    title = request.args.get('title', track_id)
+    safe = re.sub(r'[^\w\s-]', '', title)[:50]
+    out = CACHE_DIR / f'{safe or track_id}.mp3'
     if not out.exists():
-        r=requests.get(url,stream=True,timeout=60)
-        with open(str(out),'wb') as f:
-            for chunk in r.iter_content(8192):
-                if chunk: f.write(chunk)
+        url = get_yt_stream_url(track_id[3:]) if track_id.startswith('yt:') else get_sc_stream_url(track_id)
+        if url:
+            try:
+                r = requests.get(url, stream=True, timeout=60, headers={'User-Agent': 'Mozilla/5.0'})
+                with open(str(out), 'wb') as f:
+                    for chunk in r.iter_content(8192):
+                        if chunk: f.write(chunk)
+            except Exception as e:
+                log.error(f'download error: {e}')
     if out.exists():
-        return send_file(str(out),as_attachment=True,download_name=f'{title}.mp3',mimetype='audio/mpeg')
-    return jsonify({'error':'Failed'}),500
+        return send_file(str(out), as_attachment=True, download_name=f'{safe}.mp3', mimetype='audio/mpeg')
+    return jsonify({'error': 'Download failed'}), 500
 
-@app.route('/api/subscribe',methods=['POST'])
-def sub(): return jsonify({'success':True})
+@app.route('/api/artists')
+def artists():
+    q = request.args.get('q', '')
+    tracks = search_tracks(f'{q}', 5)
+    names = list(dict.fromkeys([t['artist'] for t in tracks if t['artist']]))
+    return jsonify({'artists': names})
 
-@app.route('/',defaults={'path':''})
+@app.route('/api/subscribe', methods=['POST'])
+def subscribe():
+    return jsonify({'success': True})
+
+@app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def serve(path):
-    f=Path('frontend')/path
-    if path and f.exists() and f.is_file(): return send_file(str(f))
-    return send_file('frontend/index.html')
+    frontend = Path('frontend')
+    f = frontend / path
+    if path and f.exists() and f.is_file():
+        return send_file(str(f))
+    return send_file(str(frontend / 'index.html'))
 
-if __name__=='__main__':
-    app.run(host='0.0.0.0',port=PORT,debug=False)
+if __name__ == '__main__':
+    # Pre-fetch SC client ID on startup
+    cid = get_sc_client_id()
+    log.info(f'Sona starting - SC client_id: {"OK" if cid else "FAILED"}')
+    app.run(host='0.0.0.0', port=PORT, debug=False)
