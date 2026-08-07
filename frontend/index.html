@@ -741,9 +741,9 @@ let lib=JSON.parse(localStorage.getItem('sl')||'{"liked":[],"downloads":[],"hist
 window.addEventListener('load',async()=>{
   restoreTheme();
   setTimeout(async()=>{
-    document.getElementById('splash').classList.add('hide');
+    
     const{data:{session}}=await sb.auth.getSession();
-    if(session?.user){user=session.user;enterMain();}
+    enterMain();
     else showAuth();
   },1600);
   if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(()=>{});
