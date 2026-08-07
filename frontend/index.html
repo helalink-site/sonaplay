@@ -751,7 +751,7 @@ window.addEventListener('load',async()=>{
   window.addEventListener('appinstalled',()=>{toast('✅ Sona installed!');hideIB();});
 });
 sb.auth.onAuthStateChange((ev,ses)=>{
-  if(ev==='SIGNED_IN'&&ses?.user){user=ses.user;enterMain();}
+  
   else if(ev==='SIGNED_OUT'){user=null;showAuth();}
 });
 
