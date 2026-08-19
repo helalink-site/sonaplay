@@ -1,11 +1,16 @@
 services:
   - type: web
-    name: sona
-    runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    name: sona-play-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
     envVars:
-      - key: YOUTUBE_API_KEY
+      - key: SUPABASE_URL
         sync: false
-      - key: CACHE_DIR
-        value: /tmp/sona_cache
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: COOKIE_FILE
+        sync: false
+      - key: PROXY_URL
+        sync: false
