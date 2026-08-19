@@ -4,7 +4,7 @@ FROM python:3.11-slim
 # Render's default Python buildpack does NOT include this - it's why downloads
 # were failing silently before.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
