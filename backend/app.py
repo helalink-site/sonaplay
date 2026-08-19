@@ -111,8 +111,9 @@ MIX_SEEDS = [
 YT_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{11}$")
 
 YDL_BASE_OPTS = {
-    "quiet": True,
-    "no_warnings": True,
+    "quiet": False,
+    "no_warnings": False,
+    "verbose": True,
     "noplaylist": True,
     "nocheckcertificate": True,
     "geo_bypass": True,
