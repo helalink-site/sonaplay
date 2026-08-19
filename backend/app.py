@@ -37,6 +37,7 @@ import re
 import random
 import time
 import io
+from datetime import datetime, timezone, timedelta
 from urllib.parse import quote
 
 import requests
@@ -775,6 +776,134 @@ def delete_account():
 @app.get("/api/health")
 def health():
     return jsonify({"status": "ok", "cached_tracks": len(os.listdir(CACHE_DIR))})
+
+
+ADMIN_KEY = os.environ.get("ADMIN_KEY", "")
+
+
+def _require_admin_key(req):
+    key = req.headers.get("X-Admin-Key", "")
+    return bool(ADMIN_KEY) and key == ADMIN_KEY
+
+
+def _list_all_users():
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return None
+    users, page = [], 1
+    while True:
+        r = requests.get(
+            f"{SUPABASE_URL}/auth/v1/admin/users",
+            headers={
+                "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+                "apikey": SUPABASE_SERVICE_ROLE_KEY,
+            },
+            params={"page": page, "per_page": 200},
+            timeout=15,
+        )
+        if r.status_code != 200:
+            break
+        batch = r.json().get("users", [])
+        users.extend(batch)
+        if len(batch) < 200:
+            break
+        page += 1
+    return users
+
+
+@app.get("/api/admin/stats")
+def admin_stats():
+    if not _require_admin_key(request):
+        return jsonify({"error": "unauthorized"}), 401
+    users = _list_all_users()
+    if users is None:
+        return jsonify({"error": "SUPABASE_SERVICE_ROLE_KEY not configured"}), 500
+    now = datetime.now(timezone.utc)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    month_ago = now - timedelta(days=30)
+
+    def _parse(u):
+        try:
+            return datetime.fromisoformat(u["created_at"].replace("Z", "+00:00"))
+        except Exception:
+            return None
+
+    new_today = sum(1 for u in users if (_parse(u) or now) >= today_start)
+    new_month = sum(1 for u in users if (_parse(u) or now) >= month_ago)
+    return jsonify({"total": len(users), "new_today": new_today, "new_last_30d": new_month})
+
+
+@app.get("/api/admin/users")
+def admin_users():
+    if not _require_admin_key(request):
+        return jsonify({"error": "unauthorized"}), 401
+    users = _list_all_users()
+    if users is None:
+        return jsonify({"error": "SUPABASE_SERVICE_ROLE_KEY not configured"}), 500
+    users_sorted = sorted(users, key=lambda u: u.get("created_at", ""), reverse=True)
+    out = [
+        {
+            "id": u.get("id"),
+            "email": u.get("email"),
+            "created_at": u.get("created_at"),
+            "last_sign_in_at": u.get("last_sign_in_at"),
+        }
+        for u in users_sorted[:200]
+    ]
+    return jsonify({"users": out})
+
+
+@app.get("/api/admin/health")
+def admin_health():
+    if not _require_admin_key(request):
+        return jsonify({"error": "unauthorized"}), 401
+    try:
+        ver = yt_dlp.version.__version__
+        ytdlp_ok = True
+    except Exception:
+        ver = "unknown"
+        ytdlp_ok = False
+    return jsonify({
+        "status": "ok",
+        "ytdlp_ok": ytdlp_ok,
+        "ytdlp_version": ver,
+        "cached_tracks": len(os.listdir(CACHE_DIR)) if os.path.exists(CACHE_DIR) else 0,
+    })
+
+
+@app.get("/api/admin/config")
+def admin_get_config():
+    if not _require_admin_key(request):
+        return jsonify({"error": "unauthorized"}), 401
+    key = SUPABASE_SERVICE_ROLE_KEY or SUPABASE_ANON_KEY
+    r = requests.get(
+        f"{SUPABASE_URL}/rest/v1/app_config?select=*&limit=1",
+        headers={"apikey": key, "Authorization": f"Bearer {key}"},
+        timeout=10,
+    )
+    rows = r.json() if r.status_code == 200 else []
+    return jsonify(rows[0] if rows else {})
+
+
+@app.post("/api/admin/config")
+def admin_set_config():
+    if not _require_admin_key(request):
+        return jsonify({"error": "unauthorized"}), 401
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return jsonify({"error": "SUPABASE_SERVICE_ROLE_KEY not configured"}), 500
+    body = request.get_json(force=True, silent=True) or {}
+    r = requests.patch(
+        f"{SUPABASE_URL}/rest/v1/app_config?id=eq.1",
+        headers={
+            "apikey": SUPABASE_SERVICE_ROLE_KEY,
+            "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}",
+            "Content-Type": "application/json",
+            "Prefer": "return=representation",
+        },
+        json=body,
+        timeout=10,
+    )
+    ok = r.status_code in (200, 201)
+    return jsonify(r.json() if ok else {"error": r.text}), (200 if ok else 502)
 
 
 if __name__ == "__main__":

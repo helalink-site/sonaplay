@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Sona Admin</title>
+<style>
+body{background:#0C0810;color:#F7F3FF;font-family:sans-serif;margin:0;padding:1rem;}
+h1{font-size:1.2rem}
+.tabs{display:flex;gap:.5rem;margin:1rem 0;flex-wrap:wrap}
+.tab{padding:.5rem 1rem;background:#1D1329;border-radius:8px;cursor:pointer;font-size:.85rem}
+.tab.on{background:#8B5CF6}
+.card{background:#150E1F;border:1px solid #2a1f38;border-radius:12px;padding:1rem;margin-bottom:.8rem}
+.stat{font-size:2rem;font-weight:800}
+.label{color:#9C8FB8;font-size:.8rem}
+input,button{padding:.6rem;border-radius:8px;border:1px solid #2a1f38;background:#1D1329;color:#fff;margin-bottom:.5rem;width:100%;box-sizing:border-box}
+button{background:#8B5CF6;cursor:pointer;font-weight:600}
+.row{display:flex;justify-content:space-between;align-items:center;padding:.6rem 0;border-bottom:1px solid #2a1f38;font-size:.85rem}
+.pill{padding:.2rem .6rem;border-radius:100px;font-size:.7rem}
+.approve{background:#2d6a4f}.reject{background:#6a2d2d}
+pre{background:#0C0810;padding:.7rem;border-radius:8px;font-size:.7rem;overflow-x:auto;max-height:300px;white-space:pre-wrap;word-break:break-all;}
+#gate{max-width:320px;margin:3rem auto}
+.hidden{display:none}
+</style></head>
+<body>
+
+<div id="gate">
+  <h1>Sona Admin</h1>
+  <input id="adminKey" placeholder="Admin key" type="password"/>
+  <button onclick="login()">Log In</button>
+  <div id="err" style="color:#ff6584;font-size:.8rem"></div>
+</div>
+
+<div id="dash" class="hidden">
+  <h1>Sona Admin</h1>
+  <div class="tabs">
+    <div class="tab on" onclick="tab('overview')">Overview</div>
+    <div class="tab" onclick="tab('users')">Users</div>
+    <div class="tab" onclick="tab('health')">Health</div>
+    <div class="tab" onclick="tab('settings')">Settings</div>
+  </div>
+  <div id="overview"></div>
+  <div id="users" class="hidden"></div>
+  <div id="health" class="hidden"></div>
+  <div id="settings" class="hidden"></div>
+</div>
+
+<script>
+const API_BASE='https://sonaplay.onrender.com';
+let adminKey='';
+
+function authHeaders(){return {'X-Admin-Key':adminKey};}
+
+async function login(){
+  adminKey=document.getElementById('adminKey').value.trim();
+  if(!adminKey){document.getElementById('err').textContent='Enter your admin key';return;}
+  try{
+    const r=await fetch(`${API_BASE}/api/admin/stats`,{headers:authHeaders()});
+    if(r.status===401){document.getElementById('err').textContent='Wrong admin key';return;}
+    if(!r.ok){document.getElementById('err').textContent='Backend error - check ADMIN_KEY and SUPABASE_SERVICE_ROLE_KEY are set on Render';return;}
+  }catch(e){document.getElementById('err').textContent='Could not reach backend: '+e.message;return;}
+  document.getElementById('gate').classList.add('hidden');
+  document.getElementById('dash').classList.remove('hidden');
+  loadOverview();
+}
+
+function tab(name){
+  ['overview','users','health','settings'].forEach(t=>document.getElementById(t).classList.add('hidden'));
+  document.getElementById(name).classList.remove('hidden');
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  event.target.classList.add('on');
+  if(name==='users')loadUsers();
+  if(name==='health')loadHealth();
+  if(name==='settings')loadSettings();
+}
+
+async function loadOverview(){
+  const el=document.getElementById('overview');
+  el.innerHTML='Loading…';
+  try{
+    const r=await fetch(`${API_BASE}/api/admin/stats`,{headers:authHeaders()});
+    const s=await r.json();
+    if(s.error){el.innerHTML=`<div class="card">${s.error}</div>`;return;}
+    el.innerHTML=`
+      <div class="card"><div class="stat">${s.total??0}</div><div class="label">Total Users</div></div>
+      <div class="card"><div class="stat">${s.new_today??0}</div><div class="label">New Today</div></div>
+      <div class="card"><div class="stat">${s.new_last_30d??0}</div><div class="label">New Last 30 Days</div></div>
+    `;
+  }catch(e){el.innerHTML=`<div class="card">Could not load stats: ${e.message}</div>`;}
+}
+
+async function loadUsers(){
+  const el=document.getElementById('users');
+  el.innerHTML='Loading…';
+  try{
+    const r=await fetch(`${API_BASE}/api/admin/users`,{headers:authHeaders()});
+    const d=await r.json();
+    if(d.error){el.innerHTML=`<div class="card">${d.error}</div>`;return;}
+    if(!d.users.length){el.innerHTML='<div class="card">No users yet</div>';return;}
+    el.innerHTML=d.users.map(u=>`
+      <div class="card">
+        <div><b>${u.email||'(no email)'}</b></div>
+        <div class="label">Joined: ${new Date(u.created_at).toLocaleString()}</div>
+        <div class="label">Last seen: ${u.last_sign_in_at?new Date(u.last_sign_in_at).toLocaleString():'never'}</div>
+      </div>`).join('');
+  }catch(e){el.innerHTML=`<div class="card">Could not load users: ${e.message}</div>`;}
+}
+
+async function loadHealth(){
+  const el=document.getElementById('health');
+  el.innerHTML='Loading…';
+  try{
+    const r=await fetch(`${API_BASE}/api/admin/health`,{headers:authHeaders()});
+    const h=await r.json();
+    el.innerHTML=`
+      <div class="card">
+        <div class="row"><span>Backend</span><span class="pill ${h.status==='ok'?'approve':'reject'}">${h.status==='ok'?'UP':'DOWN'}</span></div>
+        <div class="row"><span>yt-dlp</span><span class="pill ${h.ytdlp_ok?'approve':'reject'}">${h.ytdlp_ok?'OK '+h.ytdlp_version:'FAILING'}</span></div>
+        <div class="row"><span>Cached tracks</span><span>${h.cached_tracks??0}</span></div>
+      </div>
+    `;
+  }catch(e){el.innerHTML=`<div class="card">Could not reach backend: ${e.message}</div>`;}
+}
+
+async function loadSettings(){
+  const el=document.getElementById('settings');
+  el.innerHTML='Loading…';
+  try{
+    const r=await fetch(`${API_BASE}/api/admin/config`,{headers:authHeaders()});
+    const cfg=await r.json();
+    el.innerHTML=`
+      <div class="card row">
+        <span>DJ Mixes enabled</span>
+        <button style="width:auto;background:${cfg.dj_mixes_enabled?'#2d6a4f':'#6a2d2d'}" onclick="toggleConfig('dj_mixes_enabled',${!cfg.dj_mixes_enabled})">${cfg.dj_mixes_enabled?'ON':'OFF'}</button>
+      </div>
+      <div class="card row">
+        <span>Premium enabled</span>
+        <button style="width:auto;background:${cfg.premium_enabled?'#2d6a4f':'#6a2d2d'}" onclick="toggleConfig('premium_enabled',${!cfg.premium_enabled})">${cfg.premium_enabled?'ON':'OFF'}</button>
+      </div>
+    `;
+  }catch(e){el.innerHTML=`<div class="card">Could not load settings: ${e.message}</div>`;}
+}
+
+async function toggleConfig(key,val){
+  await fetch(`${API_BASE}/api/admin/config`,{
+    method:'POST',
+    headers:{...authHeaders(),'Content-Type':'application/json'},
+    body:JSON.stringify({[key]:val}),
+  });
+  loadSettings();
+}
+</script>
+</body></html>
