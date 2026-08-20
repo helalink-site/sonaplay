@@ -125,6 +125,7 @@ YDL_BASE_OPTS = {
     # was the root cause behind everything we chased today.
     "js_runtimes": {"node": {}},
     "remote_components": ["ejs:github", "ejs:npm"],
+    "extractor_args": {"youtube": {"player_client": ["android", "ios", "tv"]}},
 }
 if COOKIE_FILE and os.path.exists(COOKIE_FILE):
     YDL_BASE_OPTS["cookiefile"] = COOKIE_FILE
