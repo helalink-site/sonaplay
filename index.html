@@ -1236,14 +1236,24 @@ function enterMain(){
   const sp=document.getElementById('splash');
   if(sp){sp.classList.add('hide');setTimeout(()=>sp.style.display='none',700);}
   document.getElementById('main').classList.add('show');
-  buildGrids();restorePrefs();updateSubs();updateOfflineBadge();
-  refreshProfileRow();initInviteLink();refreshPremiumStatus();checkDjStatus();
+  // Each of these runs independently now - if one throws, it's logged
+  // but everything else (most importantly loadHome, which actually
+  // populates the screen) still runs regardless.
+  try{buildGrids();}catch(e){console.error('buildGrids failed:',e);}
+  try{restorePrefs();}catch(e){console.error('restorePrefs failed:',e);}
+  try{updateSubs();}catch(e){console.error('updateSubs failed:',e);}
+  try{updateOfflineBadge();}catch(e){console.error('updateOfflineBadge failed:',e);}
+  try{refreshProfileRow();}catch(e){console.error('refreshProfileRow failed:',e);}
+  try{initInviteLink();}catch(e){console.error('initInviteLink failed:',e);}
+  try{refreshPremiumStatus();}catch(e){console.error('refreshPremiumStatus failed:',e);}
+  try{checkDjStatus();}catch(e){console.error('checkDjStatus failed:',e);}
 
   if(!navigator.onLine){
     // No internet - skip home/network entirely, show offline library directly
     showOfflineStartup();
   } else {
-    loadLib('liked');loadHome();
+    try{loadLib('liked');}catch(e){console.error('loadLib failed:',e);}
+    loadHome();
   }
 }
 
