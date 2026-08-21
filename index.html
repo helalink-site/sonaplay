@@ -2611,14 +2611,25 @@ function updateSubs(){
 }
 
 // MISC
-function showPage(name){
+function showPage(name,fromPopState){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
   document.getElementById('p-'+name)?.classList.add('on');
   document.getElementById('n-'+name)?.classList.add('on');
   if(name==='mixes'&&!window.mixTracks)loadMixes();
   if(name==='djdash')loadDjDashboard();
+  // Push a history entry so the phone's back button steps back through
+  // pages you actually visited, instead of exiting the app/tab. Skip
+  // pushing when we're already responding to a back-button press
+  // (popstate), or we'd re-push the same entry and break the stack.
+  if(!fromPopState){
+    history.pushState({sonaPage:name},'','#'+name);
+  }
 }
+window.addEventListener('popstate',e=>{
+  const name=e.state?.sonaPage||'home';
+  showPage(name,true);
+});
 async function checkNewFromFollowed(){
   if(!prefs.artists.length)return;
   if(Notification.permission!=='granted')return;
