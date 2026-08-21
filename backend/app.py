@@ -60,6 +60,12 @@ CORS(app)
 
 COOKIE_FILE = os.environ.get("COOKIE_FILE", "")
 
+# Mobile browsers/textareas often silently convert the tab characters in a
+# Netscape cookies.txt file into spaces when pasted, corrupting the format
+# without any visible sign. Base64 has no whitespace to mangle, so if a
+# COOKIE_FILE_B64 env var is present, decode it to a real file at startup
+# and use that instead - this is the reliable path when pasting via a
+# phone's Render/hosting dashboard UI.
 COOKIE_FILE_B64 = os.environ.get("COOKIE_FILE_B64", "")
 if COOKIE_FILE_B64 and not (COOKIE_FILE and os.path.exists(COOKIE_FILE)):
     import base64 as _b64
@@ -112,9 +118,8 @@ MIX_SEEDS = [
 YT_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{11}$")
 
 YDL_BASE_OPTS = {
-    "quiet": False,
-    "no_warnings": False,
-    "verbose": True,
+    "quiet": True,
+    "no_warnings": True,
     "noplaylist": True,
     "nocheckcertificate": True,
     "geo_bypass": True,
@@ -125,7 +130,6 @@ YDL_BASE_OPTS = {
     # was the root cause behind everything we chased today.
     "js_runtimes": {"node": {}},
     "remote_components": ["ejs:github", "ejs:npm"],
-    "extractor_args": {"youtube": {"player_client": ["tv", "web", "mweb"]}},
 }
 if COOKIE_FILE and os.path.exists(COOKIE_FILE):
     YDL_BASE_OPTS["cookiefile"] = COOKIE_FILE
@@ -454,14 +458,7 @@ def mixes():
     else:
         seed = random.choice(MIX_SEEDS)
         title = seed.title()
-    # Over-fetch since we're about to filter more strictly than yt_search
-    # does on its own - allow_mixes=True only stops REJECTING mix-titled
-    # results, it doesn't REQUIRE them, so regular single-song videos that
-    # happen to match the search were leaking into this tab. Requiring an
-    # actual mix/compilation-style title fixes that.
-    raw = yt_search(seed, limit=limit * 3, allow_mixes=True)
-    tracks = [t for t in raw if MIX_TITLE_PATTERNS.search(t.get("title", ""))][:limit]
-    return jsonify({"tracks": tracks, "title": title})
+    return jsonify({"tracks": yt_search(seed, limit=limit, allow_mixes=True), "title": title})
 
 
 def resolve_live_url(vid, allow_long=False):
@@ -566,15 +563,37 @@ def relay_and_cache(vid):
         {"m4a": "audio/mp4", "webm": "audio/webm", "opus": "audio/opus"}.get(ext, "audio/mpeg")
 
     def generate():
+        # Buffer the first ~5 real seconds in memory and keep streaming
+        # to the listener immediately either way (playback is instant).
+        # Only commit to disk once someone's actually stuck around past
+        # that point - a quick skip never leaves a wasted partial file
+        # or eats disk I/O for a song nobody finished starting.
         wrote_ok = False
+        buffer = []
+        buffering = True
+        start_time = time.time()
+        f = None
         try:
-            with open(tmp_path, "wb") as f:
-                for chunk in upstream.iter_content(chunk_size=64 * 1024):
-                    if chunk:
-                        f.write(chunk)
-                        yield chunk
-            wrote_ok = True
+            for chunk in upstream.iter_content(chunk_size=64 * 1024):
+                if not chunk:
+                    continue
+                yield chunk
+                if buffering:
+                    buffer.append(chunk)
+                    if time.time() - start_time >= 5:
+                        f = open(tmp_path, "wb")
+                        for b in buffer:
+                            f.write(b)
+                        buffer = None
+                        buffering = False
+                elif f:
+                    f.write(chunk)
+            if f:
+                f.close()
+                wrote_ok = True
         finally:
+            if f and not f.closed:
+                f.close()
             if wrote_ok:
                 try:
                     os.replace(tmp_path, final_path)  # now cached for next time
@@ -582,7 +601,7 @@ def relay_and_cache(vid):
                     print(f"!!! could not finalize cache for {vid}: {e}")
             else:
                 try:
-                    os.remove(tmp_path)  # partial/failed download - don't leave junk
+                    os.remove(tmp_path)  # never reached 5s, or failed - don't leave junk
                 except Exception:
                     pass
 
@@ -779,6 +798,12 @@ def health():
     return jsonify({"status": "ok", "cached_tracks": len(os.listdir(CACHE_DIR))})
 
 
+# =====================================================================
+# ADMIN DASHBOARD
+# All routes below require a matching X-Admin-Key header, checked
+# against the ADMIN_KEY env var. Set this in Render before using the
+# admin panel - without it, every admin route returns 401.
+# =====================================================================
 ADMIN_KEY = os.environ.get("ADMIN_KEY", "")
 
 
@@ -788,6 +813,8 @@ def _require_admin_key(req):
 
 
 def _list_all_users():
+    """Paginate through every signed-up user via Supabase's admin API.
+    Requires SUPABASE_SERVICE_ROLE_KEY (the anon key can't list users)."""
     if not SUPABASE_SERVICE_ROLE_KEY:
         return None
     users, page = [], 1
