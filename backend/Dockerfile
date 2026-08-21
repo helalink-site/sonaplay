@@ -21,4 +21,4 @@ EXPOSE 5000
 # /api/download requests without blocking (both hold the connection open
 # for the whole audio transfer). --timeout is raised because audio
 # extraction + relay can take longer than gunicorn's 30s default.
-CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 8 --timeout 120
+CMD gunicorn app:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120
