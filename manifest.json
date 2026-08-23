@@ -19,6 +19,13 @@
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
+  "screenshots": [
+    { "src": "images/screenshots/screenshot-1.jpg", "sizes": "719x1404", "type": "image/jpeg", "form_factor": "narrow", "label": "Home" },
+    { "src": "images/screenshots/screenshot-2.jpg", "sizes": "720x1486", "type": "image/jpeg", "form_factor": "narrow", "label": "Now Playing" },
+    { "src": "images/screenshots/screenshot-3.jpg", "sizes": "720x1486", "type": "image/jpeg", "form_factor": "narrow", "label": "Library" },
+    { "src": "images/screenshots/screenshot-4.jpg", "sizes": "720x1486", "type": "image/jpeg", "form_factor": "narrow", "label": "Search" },
+    { "src": "images/screenshots/screenshot-5.jpg", "sizes": "720x1486", "type": "image/jpeg", "form_factor": "narrow", "label": "Settings" }
+  ],
   "shortcuts": [
     {
       "name": "Search",
