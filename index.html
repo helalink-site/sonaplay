@@ -2795,30 +2795,10 @@ async function confirmDeleteAccount(){
 }
 
 // =====================================================================
-// PRIVACY / TERMS - pulled from the same "app_config" table as Premium.
-// Edit directly in Supabase dashboard -> Table Editor -> app_config ->
-// columns "privacy_policy" / "terms_of_service" (long text). Falls back
-// to placeholder text if those columns are empty or the table isn't set
-// up yet, so it never shows a blank screen.
-// =====================================================================
-const LEGAL_FALLBACK={
-  privacy:`<strong>Privacy Policy — placeholder</strong><br><br>
-    Not set yet. Add real text in Supabase -> app_config -> privacy_policy.`,
-  terms:`<strong>Terms of Service — placeholder</strong><br><br>
-    Not set yet. Add real text in Supabase -> app_config -> terms_of_service.`
-};
-async function openLegalModal(type){
-  document.getElementById('legalModalTitle').textContent=type==='privacy'?'Privacy Policy':'Terms of Service';
-  document.getElementById('legalModalBody').innerHTML='Loading…';
-  openM('legalModal');
-  try{
-    const col=type==='privacy'?'privacy_policy':'terms_of_service';
-    const{data,error}=await sb.from('app_config').select(col).limit(1).maybeSingle();
-    const text=(!error&&data&&data[col])?data[col]:LEGAL_FALLBACK[type];
-    document.getElementById('legalModalBody').innerHTML=text;
-  }catch(e){
-    document.getElementById('legalModalBody').innerHTML=LEGAL_FALLBACK[type];
-  }
+// PRIVACY / TERMS - real hosted pages, opened directly instead of an
+// in-app modal pulling placeholder text from Supabase.
+function openLegalModal(type){
+  window.open(type==='privacy'?'/privacy.html':'/terms.html','_blank');
 }
 </script>
 </body>
