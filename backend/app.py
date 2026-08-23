@@ -895,7 +895,20 @@ def admin_set_config():
 
 @app.get("/api/health")
 def health():
-    return jsonify({"status": "ok", "cached_tracks": len(os.listdir(CACHE_DIR))})
+    cookie_active = bool(YDL_BASE_OPTS.get("cookiefile"))
+    cookie_path = YDL_BASE_OPTS.get("cookiefile", "")
+    cookie_size = 0
+    if cookie_active and os.path.exists(cookie_path):
+        cookie_size = os.path.getsize(cookie_path)
+    return jsonify({
+        "status": "ok",
+        "cached_tracks": len(os.listdir(CACHE_DIR)),
+        "cookie_active": cookie_active,
+        "cookie_path": cookie_path,
+        "cookie_size_bytes": cookie_size,
+        "cookie_file_b64_env_set": bool(os.environ.get("COOKIE_FILE_B64", "")),
+        "cookie_file_env_set": bool(os.environ.get("COOKIE_FILE", "")),
+    })
 
 
 if __name__ == "__main__":
