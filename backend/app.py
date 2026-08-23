@@ -59,6 +59,14 @@ CORS(app)
 # ---------------------------------------------------------------------------
 
 COOKIE_FILE = os.environ.get("COOKIE_FILE", "")
+
+COOKIE_FILE_B64 = os.environ.get("COOKIE_FILE_B64", "")
+if COOKIE_FILE_B64 and not (COOKIE_FILE and os.path.exists(COOKIE_FILE)):
+    import base64 as _b64
+    _decoded_path = "/tmp/cookies.txt"
+    with open(_decoded_path, "wb") as _f:
+        _f.write(_b64.b64decode(COOKIE_FILE_B64))
+    COOKIE_FILE = _decoded_path
 PROXY_URL = os.environ.get("PROXY_URL", "")
 
 # Needed only for Delete Account. Get this from Supabase dashboard ->
