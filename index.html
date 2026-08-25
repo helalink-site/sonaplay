@@ -866,6 +866,16 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 </div>
 
 <!-- INVITE FRIENDS -->
+<div class="mov" id="addToPlaylistModal">
+  <div class="msh">
+    <div class="mh"></div>
+    <div class="mt2">Add to Playlist</div>
+    <div id="addToPlaylistList" style="max-height:45vh;overflow-y:auto;margin:.8rem 0;"></div>
+    <button onclick="closeM('addToPlaylistModal');createPlaylist();" style="width:100%;padding:.7rem;border-radius:12px;background:transparent;border:1.5px dashed var(--b,rgba(108,99,255,.3));color:var(--v,#6C63FF);font-weight:600;cursor:pointer;margin-bottom:.6rem;">+ New Playlist</button>
+    <button onclick="closeM('addToPlaylistModal')" style="width:100%;padding:.82rem;border-radius:13px;background:transparent;border:1px solid var(--s2);color:var(--m);font-family:'Syne',sans-serif;font-weight:600;cursor:pointer;">Cancel</button>
+  </div>
+</div>
+
 <div class="mov" id="newPlaylistModal">
   <div class="msh">
     <div class="mh"></div>
@@ -2415,20 +2425,30 @@ async function deletePlaylist(id){
 async function openAddToPlaylist(){
   const t=queue[qIdx];if(!t)return;
   closeM('trackModal');
+  window._addToPlaylistTrack=t;
+  const listEl=document.getElementById('addToPlaylistList');
+  listEl.innerHTML='Loading…';
+  openM('addToPlaylistModal');
   try{
     const{data,error}=await sb.from('playlists').select('id,name').order('created_at',{ascending:false});
     if(error)throw error;
     if(!data.length){
-      if(confirm('You have no playlists yet. Create one now?'))await createPlaylist();
+      listEl.innerHTML='<div style="color:var(--m);text-align:center;padding:1rem 0;">No playlists yet — create one below</div>';
       return;
     }
-    const names=data.map((p,i)=>`${i+1}. ${p.name}`).join('\n');
-    const pick=prompt(`Add "${t.title}" to which playlist?\n${names}\n\nEnter a number:`);
-    const idx=parseInt(pick,10)-1;
-    if(isNaN(idx)||!data[idx])return;
-    const{error:insErr}=await sb.from('playlist_tracks').insert({playlist_id:data[idx].id,track:t});
-    if(insErr)throw insErr;
-    toast(`Added to ${data[idx].name}`);
+    listEl.innerHTML=data.map(p=>`
+      <div onclick="confirmAddToPlaylist('${p.id}','${p.name.replace(/'/g,"\\'")}')" style="padding:.85rem 1rem;border-radius:12px;background:var(--s2);margin-bottom:.5rem;cursor:pointer;font-weight:600;">${p.name}</div>
+    `).join('');
+  }catch(e){listEl.innerHTML='<div style="color:var(--c);text-align:center;">Could not load playlists</div>';}
+}
+async function confirmAddToPlaylist(playlistId,playlistName){
+  const t=window._addToPlaylistTrack;
+  closeM('addToPlaylistModal');
+  if(!t)return;
+  try{
+    const{error}=await sb.from('playlist_tracks').insert({playlist_id:playlistId,track:t});
+    if(error)throw error;
+    toast(`Added to ${playlistName}`);
   }catch(e){toast('Could not add to playlist');}
 }
 
@@ -2598,7 +2618,11 @@ window.addEventListener('popstate',(e)=>{
 function confirmExitApp(){
   exitConfirmed=true;
   closeM('exitConfirmModal');
-  history.back();
+  // A single history.back() only undoes one step, but by now we may have
+  // pushed many entries (every page visited, every time the player
+  // opened) - jump back through all of them in one go so Exit actually
+  // leaves instead of landing on some earlier in-app screen.
+  history.go(-(navStack.length+1));
 }
 async function checkNewFromFollowed(){
   if(!prefs.artists.length)return;
