@@ -2374,7 +2374,10 @@ async function updateOfflineBadge(){
 }
 
 // Listen for online/offline changes
-window.addEventListener('online',()=>{toast('Back online');});
+window.addEventListener('online',()=>{
+  toast('Back online');
+  loadHome(); // refresh Trending/New Releases/For You silently in the background
+});
 window.addEventListener('offline',()=>{
   toast('No internet — showing offline songs');
   showOfflineStartup();
