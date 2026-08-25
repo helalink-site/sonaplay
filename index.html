@@ -866,6 +866,16 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 </div>
 
 <!-- INVITE FRIENDS -->
+<div class="mov" id="newPlaylistModal">
+  <div class="msh">
+    <div class="mh"></div>
+    <div class="mt2">New Playlist</div>
+    <input type="text" id="newPlaylistNameInput" placeholder="Playlist name" style="width:100%;padding:.85rem 1rem;border-radius:12px;border:1px solid var(--b,rgba(108,99,255,.2));background:var(--s2);color:var(--t);font-size:.9rem;margin:.8rem 0 1.2rem;box-sizing:border-box;"/>
+    <button onclick="confirmCreatePlaylist()" style="width:100%;padding:.82rem;border-radius:13px;background:var(--g);border:none;color:#fff;font-family:'Syne',sans-serif;font-weight:700;cursor:pointer;margin-bottom:.6rem;">Create</button>
+    <button onclick="closeM('newPlaylistModal')" style="width:100%;padding:.82rem;border-radius:13px;background:transparent;border:1px solid var(--s2);color:var(--m);font-family:'Syne',sans-serif;font-weight:600;cursor:pointer;">Cancel</button>
+  </div>
+</div>
+
 <div class="mov" id="inviteModal">
   <div class="msh">
     <div class="mh"></div>
@@ -921,11 +931,12 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 
 <!-- PRIVACY / TERMS -->
 <div class="mov" id="legalModal">
-  <div class="msh">
-    <div class="mh"></div>
-    <div class="mt2" id="legalModalTitle">Privacy Policy</div>
-    <div class="srs" style="max-height:50vh;overflow-y:auto;line-height:1.6;margin-bottom:1rem;" id="legalModalBody"></div>
-    <button onclick="closeM('legalModal')" style="width:100%;padding:.82rem;border-radius:13px;background:var(--g);border:none;color:#fff;font-family:'Syne',sans-serif;font-weight:700;cursor:pointer;">Close</button>
+  <div class="msh" style="max-width:420px;width:92vw;height:80vh;display:flex;flex-direction:column;padding:1rem;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.7rem;">
+      <div class="mt2" id="legalModalTitle" style="margin:0;">Privacy Policy</div>
+      <button onclick="closeM('legalModal')" style="background:none;border:none;color:var(--m);font-size:1.3rem;cursor:pointer;padding:0 .3rem;">×</button>
+    </div>
+    <iframe id="legalModalFrame" src="about:blank" style="flex:1;width:100%;border:none;border-radius:12px;background:#0A0A0F;"></iframe>
   </div>
 </div>
 
@@ -1906,10 +1917,12 @@ async function play(track,q,idx){
 
   // Check offline first
   const offlineUrl=await getOfflineUrl(vid);
+  window._isOfflinePlayback=!!offlineUrl;
   if(offlineUrl){
     streamUrl=offlineUrl;
     toast('Playing offline');
   }
+  updateOfflinePlayerUI(window._isOfflinePlayback);
 
   // Already resolved in the background while the previous track was playing
   if(!streamUrl&&prefetchCache[vid]){
@@ -2224,8 +2237,28 @@ function seekTo(e){
 document.getElementById('progBar').addEventListener('touchstart',seekTo,{passive:true});
 document.getElementById('progBar').addEventListener('touchmove',seekTo,{passive:true});
 function seekBy(s){if(audio.duration)audio.currentTime=Math.max(0,Math.min(audio.duration,audio.currentTime+s));}
-function openFP(){document.getElementById('fp').classList.add('open');}
-function closeFP(){document.getElementById('fp').classList.remove('open');}
+function openFP(){
+  document.getElementById('fp').classList.add('open');
+  history.pushState({sonaPlayerOpen:true},'','#player');
+}
+function closeFP(fromPopstate){
+  document.getElementById('fp').classList.remove('open');
+  if(!fromPopstate)history.back();
+}
+function updateOfflinePlayerUI(isOffline){
+  // Follow and "go to artist" both need a live connection to fetch
+  // artist data - hide them when playing a downloaded track so nothing
+  // sits there looking tappable but silently failing.
+  const followBtn=document.getElementById('fpFollowBtn');
+  const artistEl=document.getElementById('fpArtist');
+  if(followBtn)followBtn.style.display=isOffline?'none':'';
+  if(artistEl){
+    artistEl.style.cursor=isOffline?'default':'pointer';
+    artistEl.onclick=isOffline?null:function(){goToArtist(this.textContent);};
+  }
+  const shareBtn=document.querySelector('.fa-btn[onclick="shareTrack()"]');
+  if(shareBtn)shareBtn.style.display=isOffline?'none':'';
+}
 function fmt(s){if(isNaN(s))return'0:00';const m=Math.floor(s/60),sec=Math.floor(s%60);return`${m}:${sec.toString().padStart(2,'0')}`;}
 let _lastPosSave=0;
 audio.addEventListener('timeupdate',()=>{
@@ -2336,11 +2369,17 @@ window.addEventListener('offline',()=>{
   toast('No internet — showing offline songs');
   showOfflineStartup();
 });
-async function createPlaylist(){
-  const name=prompt('Playlist name:');
-  if(!name||!name.trim())return;
+function createPlaylist(){
+  document.getElementById('newPlaylistNameInput').value='';
+  openM('newPlaylistModal');
+  setTimeout(()=>document.getElementById('newPlaylistNameInput')?.focus(),200);
+}
+async function confirmCreatePlaylist(){
+  const name=document.getElementById('newPlaylistNameInput').value.trim();
+  if(!name)return;
+  closeM('newPlaylistModal');
   try{
-    const{error}=await sb.from('playlists').insert({user_id:session.user.id,name:name.trim()});
+    const{error}=await sb.from('playlists').insert({user_id:session.user.id,name});
     if(error)throw error;
     toast('Playlist created');
     loadLib('playlists');
@@ -2535,7 +2574,13 @@ function showPage(name,fromPopstate){
     history.pushState({sonaPage:name},'','#'+name);
   }
 }
-window.addEventListener('popstate',()=>{
+window.addEventListener('popstate',(e)=>{
+  // If the full player screen is open, back should dismiss it first,
+  // not touch page navigation underneath.
+  if(document.getElementById('fp').classList.contains('open') && !(e.state&&e.state.sonaPlayerOpen)){
+    closeFP(true);
+    return;
+  }
   if(navStack.length>1){
     navStack.pop();
     const prev=navStack[navStack.length-1];
@@ -2795,10 +2840,12 @@ async function confirmDeleteAccount(){
 }
 
 // =====================================================================
-// PRIVACY / TERMS - real hosted pages, opened directly instead of an
-// in-app modal pulling placeholder text from Supabase.
+// PRIVACY / TERMS - real hosted pages, shown in an in-app iframe so it
+// never leaves the app or shows a browser tab/URL bar.
 function openLegalModal(type){
-  window.open(type==='privacy'?'/privacy.html':'/terms.html','_blank');
+  document.getElementById('legalModalTitle').textContent=type==='privacy'?'Privacy Policy':'Terms of Service';
+  document.getElementById('legalModalFrame').src=type==='privacy'?'/privacy.html':'/terms.html';
+  openM('legalModal');
 }
 </script>
 </body>

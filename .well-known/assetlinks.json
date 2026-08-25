@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "com.sonaplay.app",
+        "sha256_cert_fingerprints": ["59:4B:67:1F:DA:6B:11:D1:D2:34:D1:9B:E7:06:2C:D1:56:A2:59:CF:EB:62:87:91:FD:C6:D9:00:7A:7B:AD:7E"]
+      }
+    }]
