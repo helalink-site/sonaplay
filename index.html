@@ -428,6 +428,13 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 <body>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- WELCOME / CHOICE SCREEN -->
+<div id="offlineGate" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:none;flex-direction:column;align-items:center;justify-content:center;padding:2rem 1.5rem;text-align:center;">
+  <i class="ph ph-wifi-slash" style="font-size:3rem;color:var(--m);margin-bottom:1rem;"></i>
+  <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:1.3rem;margin-bottom:.5rem;">No Internet Connection</div>
+  <p style="color:var(--m);font-size:.9rem;margin-bottom:2rem;max-width:280px;">Connect to the internet to sign in, search, and stream new music.</p>
+  <button onclick="playOfflineFromGate()" class="ag-submit" style="width:100%;max-width:280px;">Play Offline Audio</button>
+</div>
+
 <div id="welcomeGate">
   <div class="collage">
     <div class="pbg ph1" style="background-image:url('images/hero-dj.jpg')"></div>
@@ -1112,17 +1119,21 @@ window.addEventListener('DOMContentLoaded',async()=>{
   if(!navigator.onLine){
     // Offline: don't hit the network for auth at all - trust whatever
     // session is already cached locally so downloaded/imported songs still
-    // play with zero connection. If nobody has ever logged in on this
-    // device, there's nothing cached to trust, so the gate still shows.
+    // play with zero connection.
     const cached=localStorage.getItem('sb-'+SUPA_URL.split('//')[1].split('.')[0]+'-auth-token');
-    if(!cached){
-      if(sp)sp.style.display='none';
-      document.getElementById('welcomeGate').classList.add('show');
-      return;
-    }
     if(sp)sp.style.display='none';
-    document.getElementById('main').classList.add('show');
-    try{enterMain();}catch(e){console.error(e);}
+    if(cached){
+      // Already have a session cached - go straight into the app, no
+      // dead-end gate needed, offline detection inside enterMain()
+      // handles routing to the offline library automatically.
+      document.getElementById('main').classList.add('show');
+      try{enterMain();}catch(e){console.error(e);}
+    } else {
+      // Never logged in on this device and no internet to log in with -
+      // a login screen would be misleading since it can't work anyway.
+      // Show a clear no-internet message instead of a confusing dead end.
+      document.getElementById('offlineGate').style.display='flex';
+    }
     return;
   }
 
@@ -1155,6 +1166,11 @@ window.addEventListener('DOMContentLoaded',async()=>{
 });
 
 // MAIN
+function playOfflineFromGate(){
+  document.getElementById('offlineGate').style.display='none';
+  document.getElementById('main').classList.add('show');
+  try{enterMain();}catch(e){console.error(e);}
+}
 function enterMain(){
   const sp=document.getElementById('splash');
   if(sp){sp.classList.add('hide');setTimeout(()=>sp.style.display='none',700);}

@@ -60,6 +60,12 @@ CORS(app)
 
 COOKIE_FILE = os.environ.get("COOKIE_FILE", "")
 
+# Mobile browsers/textareas often silently convert the tab characters in a
+# Netscape cookies.txt file into spaces when pasted, corrupting the format
+# without any visible sign. Base64 has no whitespace to mangle, so if a
+# COOKIE_FILE_B64 env var is present, decode it to a real file at startup
+# and use that instead - this is the reliable path when pasting via a
+# phone's Render/hosting dashboard UI.
 COOKIE_FILE_B64 = os.environ.get("COOKIE_FILE_B64", "")
 if COOKIE_FILE_B64 and not (COOKIE_FILE and os.path.exists(COOKIE_FILE)):
     import base64 as _b64
@@ -460,6 +466,22 @@ def mixes():
     # actual mix/compilation-style title fixes that.
     raw = yt_search(seed, limit=limit * 3, allow_mixes=True)
     tracks = [t for t in raw if MIX_TITLE_PATTERNS.search(t.get("title", ""))][:limit]
+
+    # A single artist rarely has actual "DJ mix" style content about
+    # themselves - real mixes are almost always multi-artist compilations.
+    # Rather than leaving the person stuck on an empty tab, fall back to
+    # their genre preference, then a random mix seed, so DJ Mixes always
+    # has something to show.
+    if not tracks and artist_pref:
+        if genre:
+            seed = f"{genre} mix latest 2026"
+            title = f"Latest {genre} Mixes"
+        else:
+            seed = random.choice(MIX_SEEDS)
+            title = seed.title()
+        raw = yt_search(seed, limit=limit * 3, allow_mixes=True)
+        tracks = [t for t in raw if MIX_TITLE_PATTERNS.search(t.get("title", ""))][:limit]
+
     return jsonify({"tracks": tracks, "title": title})
 
 
