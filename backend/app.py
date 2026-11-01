@@ -44,6 +44,8 @@ import requests
 import yt_dlp
 from flask import Flask, request, jsonify, Response, stream_with_context, send_file
 from flask_cors import CORS
+import hmac
+from security import init_security, ALLOWED_ORIGINS
 try:
     from mutagen.id3 import ID3, ID3NoHeaderError, TIT2, TPE1, APIC
     from mutagen.mp4 import MP4, MP4Cover
@@ -52,7 +54,8 @@ except ImportError:
     MUTAGEN_OK = False
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, origins=ALLOWED_ORIGINS)
+init_security(app)
 
 # ---------------------------------------------------------------------------
 # Config
@@ -78,11 +81,8 @@ PROXY_URL = os.environ.get("PROXY_URL", "")
 # Needed only for Delete Account. Get this from Supabase dashboard ->
 # Settings -> API -> service_role key. NEVER put this in the frontend -
 # it has full admin access to every user's data.
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://ioukidprmfvkkoohlpmy.supabase.co")
-SUPABASE_ANON_KEY = os.environ.get(
-    "SUPABASE_ANON_KEY",
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvdWtpZHBybWZ2a2tvb2hscG15Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0NjAxODEsImV4cCI6MjEwMjAzNjE4MX0.BMrmsC_DMDX8HP7CMyJ3O3EUOC8IWAvbBk7rE5o4wIA",
-)
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
 SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
 # Where downloaded audio lives. On Render, point this at a persistent disk
@@ -422,6 +422,35 @@ def uploaded_by_artist(track, requested_name):
     if not candidate or not query:
         return False
     return query in candidate or candidate in query
+
+
+POPULAR_ARTISTS = ['Rayvanny', 'Diamond Platnumz', 'Burna Boy', 'Wizkid', 'Davido', 'Sauti Sol', 'Khaligraph Jones', 'Mejja', 'Bien', 'Nyashinski', 'Harmonize', 'Nandy', 'Zuchu', 'Bahati', 'Otile Brown', 'Alikiba', 'Marioo', 'Jux', 'Mbosso', 'Whozu', 'Tems', 'Asake', 'Rema', 'Ayra Starr', 'Kizz Daniel', 'Focalistic', 'Tyla', 'Willy Paul']
+
+
+@app.get("/api/suggest")
+def suggest():
+    """Typo-tolerant artist suggestions (edit distance via difflib), fast and local."""
+    import difflib
+    q = request.args.get("q", "").strip()[:60]
+    nq = normalize_name(q)
+    if len(nq) < 2:
+        return jsonify({"suggestions": [], "corrected": None})
+    scored = []
+    for name in POPULAR_ARTISTS:
+        nn = normalize_name(name)
+        first = normalize_name(name.split()[0])
+        if nn.startswith(nq) or first.startswith(nq):
+            score = 1.0
+        else:
+            score = max(difflib.SequenceMatcher(None, nq, nn).ratio(), difflib.SequenceMatcher(None, nq, first).ratio())
+        if score >= 0.72:
+            scored.append((score, name))
+    scored.sort(key=lambda x: -x[0])
+    out = [n for _, n in scored[:6]]
+    exact = any(normalize_name(n) == nq or normalize_name(n).startswith(nq) for n in out)
+    corrected = out[0] if out and not exact else None
+    return jsonify({"suggestions": [{"name": n, "type": "artist"} for n in out], "corrected": corrected})
+
 
 
 @app.get("/api/artist")
@@ -800,7 +829,7 @@ ADMIN_KEY = os.environ.get("ADMIN_KEY", "")
 
 def _require_admin_key(req):
     key = req.headers.get("X-Admin-Key", "")
-    return bool(ADMIN_KEY) and key == ADMIN_KEY
+    return bool(ADMIN_KEY) and hmac.compare_digest(str(key or ""), ADMIN_KEY)
 
 
 def _list_all_users():
@@ -941,6 +970,92 @@ def health():
     })
 
 
+
+# ---------------------------------------------------------------------------
+# Scheduled job: new releases from followed artists + pending admin broadcasts.
+# Call every ~30 min from an external scheduler (free Render instances sleep):
+#   POST /api/jobs/check-releases   header X-Cron-Secret: <CRON_SECRET>
+# ---------------------------------------------------------------------------
+CRON_SECRET = os.environ.get("CRON_SECRET", "")
+VAPID_PRIVATE_KEY = os.environ.get("VAPID_PRIVATE_KEY", "")
+VAPID_EMAIL = os.environ.get("VAPID_EMAIL", "admin@example.com")
+
+
+def _sb(method, path, **kw):
+    key = SUPABASE_SERVICE_ROLE_KEY
+    h = {"apikey": key, "Authorization": "Bearer " + key, "Content-Type": "application/json"}
+    h.update(kw.pop("headers", {}))
+    return requests.request(method, f"{SUPABASE_URL}/rest/v1/{path}", headers=h, timeout=20, **kw)
+
+
+def _push(user_ids, payload):
+    if not VAPID_PRIVATE_KEY or not user_ids:
+        return 0
+    try:
+        import json as _json
+        from pywebpush import webpush, WebPushException
+    except ImportError:
+        return 0
+    subs = _sb("GET", f"push_subscriptions?user_id=in.({','.join(user_ids)})&select=id,endpoint,p256dh,auth").json()
+    sent = 0
+    for s in subs:
+        try:
+            webpush({"endpoint": s["endpoint"], "keys": {"p256dh": s["p256dh"], "auth": s["auth"]}},
+                    data=_json.dumps(payload), vapid_private_key=VAPID_PRIVATE_KEY,
+                    vapid_claims={"sub": "mailto:" + VAPID_EMAIL})
+            sent += 1
+        except WebPushException as e:
+            if getattr(e.response, "status_code", 0) in (404, 410):
+                _sb("DELETE", f"push_subscriptions?id=eq.{s['id']}")
+        except Exception:
+            pass
+    return sent
+
+
+@app.post("/api/jobs/check-releases")
+def job_check_releases():
+    if not CRON_SECRET or not hmac.compare_digest(request.headers.get("X-Cron-Secret", ""), CRON_SECRET):
+        return jsonify({"error": "forbidden"}), 403
+    if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
+        return jsonify({"error": "not configured"}), 500
+    import datetime as _dt
+    follows = _sb("GET", "follows?select=user_id,artist_name&kind=eq.artist&limit=5000").json()
+    muted = {r["user_id"] for r in _sb("GET", "user_prefs?select=user_id&notify_new_songs=eq.false").json()}
+    state = {r["artist_name"]: r for r in _sb("GET", "artist_state?select=artist_name,last_seen_video_id,checked_at").json()}
+    by = {}
+    for f in follows:
+        by.setdefault(f["artist_name"], []).append(f["user_id"])
+    new_songs = 0
+    for artist in sorted(by, key=lambda a: (state.get(a) or {}).get("checked_at") or "")[:40]:
+        try:
+            tracks = [t for t in yt_search(f"{artist} official audio", limit=5, order="date") if uploaded_by_artist(t, artist)]
+        except Exception:
+            continue
+        if not tracks:
+            continue
+        t = tracks[0]
+        vid = t["videoId"]
+        last = (state.get(artist) or {}).get("last_seen_video_id")
+        _sb("POST", "artist_state?on_conflict=artist_name", headers={"Prefer": "resolution=merge-duplicates"},
+            json={"artist_name": artist, "last_seen_video_id": vid, "checked_at": _dt.datetime.utcnow().isoformat() + "Z"})
+        if not last or last == vid:      # first sighting only records the song, no alert
+            continue
+        users = [u for u in by[artist] if u not in muted]
+        if users:
+            _sb("POST", "notifications", json=[{"user_id": u, "artist": artist, "video_id": vid, "title": t.get("title"),
+                "thumbnail": t.get("thumbnail"), "kind": "release", "pushed": True} for u in users])
+            _push(users, {"artist": artist, "title": t.get("title"), "video_id": vid, "thumbnail": t.get("thumbnail")})
+            new_songs += 1
+    pend = _sb("GET", "notifications?kind=eq.broadcast&pushed=eq.false&select=id,user_id,title,body&limit=1000").json()
+    groups = {}
+    for n in pend:
+        groups.setdefault((n["title"], n["body"]), []).append(n)
+    for (title, body), items in groups.items():
+        _push([i["user_id"] for i in items], {"kind": "broadcast", "title": title, "body": body})
+        _sb("PATCH", f"notifications?id=in.({','.join(i['id'] for i in items)})", json={"pushed": True})
+    return jsonify({"artists_checked": min(len(by), 40), "new_songs": new_songs, "broadcasts_pushed": len(pend)})
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True, threaded=True)
+    app.run(host="0.0.0.0", port=port, debug=os.environ.get("FLASK_DEBUG") == "1", threaded=True)

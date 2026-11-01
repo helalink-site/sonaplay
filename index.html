@@ -336,7 +336,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 @keyframes sdot{0%,100%{opacity:0;}10%,60%{opacity:1;}70%{opacity:0;}}
 .wave-label{color:rgba(255,255,255,.7);font-size:.83rem;font-weight:500;letter-spacing:1px;}
 /* INSTALL BANNER - clean version */
-#ibanner{display:none;position:fixed;bottom:calc(var(--nav) + 72px + var(--safe) + .5rem);left:.7rem;right:.7rem;background:var(--s1);border:1px solid var(--v);border-radius:17px;padding:.8rem 1rem;z-index:300;box-shadow:0 4px 20px rgba(108,99,255,.2);}
+#ibanner{display:none;position:fixed;top:calc(env(safe-area-inset-top,0px) + .6rem);animation:ibIn .35s ease-out;left:.7rem;right:.7rem;background:var(--s1);border:1px solid var(--v);border-radius:17px;padding:.8rem 1rem;z-index:300;box-shadow:0 4px 20px rgba(108,99,255,.2);}
 #ibanner .ib-row{display:flex;align-items:center;gap:.7rem;}
 #ibanner img{width:36px;height:36px;border-radius:9px;}
 #ibanner .ib-info{flex:1;}
@@ -344,6 +344,17 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 #ibanner .ib-sub{font-size:.71rem;color:var(--m);}
 #ibanner .ib-close{background:none;border:none;color:var(--m);font-size:1rem;cursor:pointer;padding:.2rem;}
 #ibanner .ib-btn{width:100%;margin-top:.6rem;padding:.6rem;border-radius:10px;background:var(--g);border:none;color:#fff;font-weight:700;font-size:.81rem;cursor:pointer;}
+.ib{position:relative}
+.bellb{position:absolute;top:2px;right:2px;min-width:16px;height:16px;border-radius:8px;background:var(--c);color:#fff;font-size:10px;font-weight:600;display:none;align-items:center;justify-content:center;padding:0 4px}
+.ntr{display:flex;gap:12px;align-items:center;padding:10px 0;cursor:pointer}
+.ntr img{width:46px;height:46px;border-radius:8px;object-fit:cover;background:var(--s2);flex:none}
+.ntd{width:9px;height:9px;border-radius:50%;background:var(--c);flex:none}
+.eqb{display:flex;justify-content:space-between;height:150px;margin:8px 0}
+.eqb div{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;color:var(--m)}
+.eqb input{writing-mode:vertical-lr;direction:rtl;height:120px}
+.eqc{padding:7px 13px;border-radius:18px;background:var(--s2);border:0;color:var(--t);margin:3px;cursor:pointer;font:inherit}
+@keyframes ibIn{from{transform:translateY(-130%);opacity:0}to{transform:none;opacity:1}}
+@media(prefers-reduced-motion:reduce){#ibanner{animation:none!important}}
 /* 3-DOT OPTIONS MENU */
 .opts-menu{position:fixed;background:var(--s1);border:1px solid var(--b);border-radius:16px;padding:.5rem;z-index:600;box-shadow:0 8px 30px rgba(0,0,0,.4);min-width:180px;display:none;}
 .opts-menu.show{display:block;}
@@ -370,7 +381,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 .offline-empty-btn{padding:.65rem 1.4rem;border-radius:50px;background:linear-gradient(135deg,#6C63FF,#A855F7);border:none;color:#fff;font-family:'Syne',sans-serif;font-weight:700;font-size:.82rem;cursor:pointer;margin-top:.3rem;}
 
 /* INSTALL BANNER */
-#ibanner{display:none;position:fixed;bottom:calc(var(--nav) + 72px + var(--safe) + .5rem);left:.7rem;right:.7rem;background:var(--s2);border:1px solid var(--v);border-radius:17px;padding:.9rem 1.1rem;z-index:300;box-shadow:0 4px 20px rgba(108,99,255,.3);}
+#ibanner{display:none;position:fixed;top:calc(env(safe-area-inset-top,0px) + .6rem);animation:ibIn .35s ease-out;left:.7rem;right:.7rem;background:var(--s2);border:1px solid var(--v);border-radius:17px;padding:.9rem 1.1rem;z-index:300;box-shadow:0 4px 20px rgba(108,99,255,.3);}
 #ibanner .ib-row{display:flex;align-items:center;gap:.7rem;}
 #ibanner img{width:40px;height:40px;border-radius:10px;}
 #ibanner .ib-info{flex:1;}
@@ -426,7 +437,17 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 </style>
 </head>
 <body>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4"></script>
+<div class="mov" id="notifModal"><div class="msh"><div class="mh"></div><div class="mt2">Notifications</div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><button onclick="markAllRead()" style="background:none;border:0;color:var(--v);font-weight:600;cursor:pointer;font:inherit">Mark all read</button>
+  <label class="tog"><input type="checkbox" id="notifTog2" onchange="toggleNotif(this.checked)"/><div class="tog-t"></div></label></div>
+  <div id="notifList"></div></div></div>
+<div class="mov" id="eqModal"><div class="msh"><div class="mh"></div><div class="mt2">Equalizer</div>
+  <div style="display:flex;justify-content:space-between;align-items:center"><span>Equalizer on</span><label class="tog"><input type="checkbox" id="eqTog" onchange="eqToggle(this.checked)"/><div class="tog-t"></div></label></div>
+  <div id="eqPre" style="margin:10px 0"></div><div class="eqb" id="eqBands"></div></div></div>
+<div id="ibanner" role="dialog" aria-label="Install Sona Play"><div class="ib-row"><img src="icons/icon-192.png" alt=""><div class="ib-info"><div class="ib-title">Install Sona Play</div><div class="ib-sub" id="ibSub">Add it to your home screen</div></div><button class="ib-close" onclick="dismissInstall()" aria-label="Close">&#10005;</button></div><button class="ib-btn" id="ibBtn" onclick="doInstall()">Install</button></div>
+<div id="regionGate" style="display:none;position:fixed;inset:0;z-index:10000;background:var(--bg);align-items:center;justify-content:center;padding:1.5rem"><div style="width:100%;max-width:340px"><div class="mt2">Where are you listening from?</div><select id="rgSel" aria-label="Region" style="width:100%;padding:.8rem 1rem;border-radius:12px;background:var(--s2);border:none;color:var(--t);font:inherit;margin:1rem 0"><option value="">Select your region</option><option>Kenya</option><option>Tanzania</option><option>Uganda</option><option>Rwanda</option><option>Burundi</option><option>DR Congo</option><option>Ethiopia</option><option>Somalia</option><option>South Sudan</option><option>Nigeria</option><option>Ghana</option><option>South Africa</option><option>Zambia</option><option>Zimbabwe</option><option>Mozambique</option><option>Malawi</option><option>Other Africa</option><option>United Kingdom</option><option>United States</option><option>Canada</option><option>Other Europe</option><option>Middle East</option><option>Asia</option><option>Rest of world</option></select><button onclick="saveRegion()" style="width:100%;padding:.82rem;border-radius:13px;background:var(--g);border:none;color:#fff;font-family:'Syne',sans-serif;font-weight:700;cursor:pointer">Continue</button><div id="rgErr" style="color:var(--c);font-size:.8rem;margin-top:.6rem"></div></div></div>
 <!-- WELCOME / CHOICE SCREEN -->
 <div id="offlineGate" style="position:fixed;inset:0;background:var(--bg);z-index:9999;display:none;flex-direction:column;align-items:center;justify-content:center;padding:2rem 1.5rem;text-align:center;">
   <i class="ph ph-wifi-slash" style="font-size:3rem;color:var(--m);margin-bottom:1rem;"></i>
@@ -457,6 +478,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
     <input type="email" id="agEmail" placeholder="Email" autocomplete="email"/>
     <input type="password" id="agPass" placeholder="Password" autocomplete="current-password"/>
     <input type="text" id="agName" placeholder="Display name" style="display:none"/>
+    <select id="agRegion" aria-label="Region" style="width:100%;padding:.8rem 1rem;border-radius:12px;background:var(--s2);border:none;color:var(--t);font:inherit;margin-bottom:.7rem" hidden><option value="">Select your region</option><option>Kenya</option><option>Tanzania</option><option>Uganda</option><option>Rwanda</option><option>Burundi</option><option>DR Congo</option><option>Ethiopia</option><option>Somalia</option><option>South Sudan</option><option>Nigeria</option><option>Ghana</option><option>South Africa</option><option>Zambia</option><option>Zimbabwe</option><option>Mozambique</option><option>Malawi</option><option>Other Africa</option><option>United Kingdom</option><option>United States</option><option>Canada</option><option>Other Europe</option><option>Middle East</option><option>Asia</option><option>Rest of world</option></select>
     <button class="ag-submit" id="agSubmitBtn" onclick="handleAuthSubmit()">Log In</button>
     <div class="ag-err" id="agErr"></div>
     <div class="ag-divider">or</div>
@@ -523,6 +545,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
       <div class="tb-logo" onclick="showPage('home')" style="cursor:pointer">Sona Play</div>
     </div>
     <div class="tb-right">
+      <button class="ib" onclick="openNotifs()" title="Notifications" aria-label="Notifications"><i class="ph ph-bell"></i><span class="bellb" id="bellBadge"></span></button>
       <button class="ib" onclick="openSearchPanel()" title="Search"><i class="ph ph-magnifying-glass"></i></button>
       <button class="ib" onclick="toggleTheme()" title="Theme"><i class="ph ph-moon" id="thIcon"></i></button>
     </div>
@@ -658,6 +681,11 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
           <div class="sri"><div class="srt">Followed Artists & DJs</div><div class="srs" id="artistSub">None yet — follow from their page</div></div>
           <i class="ph ph-caret-right" style="color:var(--m)"></i>
         </div>
+        <div class="sr" onclick="openEq()">
+          <div class="si"><i class="ph ph-sliders-horizontal"></i></div>
+          <div class="sri"><div class="srt">Equalizer</div></div>
+          <i class="ph ph-caret-right" style="color:var(--m)"></i>
+        </div>
         <div class="sr" onclick="openM('qualityModal')">
           <div class="si r"><i class="ph ph-waveform"></i></div>
           <div class="sri"><div class="srt">Download & Streaming Quality</div><div class="srs" id="qualitySub">High Quality</div></div>
@@ -715,7 +743,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
         </div>
         <div class="sr" style="cursor:default;">
           <div class="si"><i class="ph ph-info"></i></div>
-          <div class="sri"><div class="srt">App Version</div><div class="srs">Sona Play 1.0 · by Xavi Tech / Skyline Technologies</div></div>
+          <div class="sri"><div class="srt">App Version</div><div class="srs">Sona Play Version 3 · by Skyline Technologies</div></div>
         </div>
       </div>
     </div>
@@ -846,7 +874,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
       <label style="font-size:.75rem;color:var(--m);display:block;margin-bottom:.3rem;">New Password</label>
       <input type="password" id="profilePasswordInput" placeholder="Leave blank to keep current password" style="width:100%;padding:.7rem .9rem;border-radius:11px;background:var(--s2);border:none;color:var(--t);font-size:.9rem;"/>
     </div>
-    <div style="font-size:.72rem;color:var(--m);margin-bottom:1rem;">At least 6 characters. Only fill this in if you want to change it.</div>
+    <div style="font-size:.72rem;color:var(--m);margin-bottom:1rem;">At least 8 characters. Only fill this in if you want to change it.</div>
     <div id="profileSaveMsg" style="font-size:.8rem;margin-bottom:.6rem;"></div>
     <button onclick="saveProfile()" style="width:100%;padding:.82rem;border-radius:13px;background:var(--g);border:none;color:#fff;font-family:'Syne',sans-serif;font-weight:700;cursor:pointer;margin-bottom:1.1rem;" id="profileSaveBtn">Save Changes</button>
 
@@ -961,10 +989,9 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 <div class="mov" id="exitConfirmModal">
   <div class="msh">
     <div class="mh"></div>
-    <div class="mt2">Leave Sona Play?</div>
-    <p class="srs" style="margin-bottom:1.2rem;">Minimize keeps your music playing in the background.</p>
-    <button onclick="closeM('exitConfirmModal')" style="width:100%;padding:.82rem;border-radius:13px;background:var(--g);border:none;color:#fff;font-family:'Syne',sans-serif;font-weight:700;cursor:pointer;margin-bottom:.6rem;">Minimize (Keep Playing)</button>
-    <button onclick="confirmExitApp()" style="width:100%;padding:.82rem;border-radius:13px;background:transparent;border:1px solid var(--s2);color:var(--m);font-family:'Syne',sans-serif;font-weight:600;cursor:pointer;">Exit</button>
+    <div class="mt2">Exit Sona Play?</div>
+    <button onclick="minimizeApp()" style="width:100%;padding:.82rem;border-radius:13px;background:var(--g);border:none;color:#fff;font-family:'Syne',sans-serif;font-weight:700;cursor:pointer;margin-bottom:.6rem;">Minimize</button>
+    <button onclick="confirmExitApp()" style="width:100%;padding:.82rem;border-radius:13px;background:transparent;border:1px solid var(--s2);color:var(--m);font-family:'Syne',sans-serif;font-weight:700;cursor:pointer;">Exit</button>
   </div>
 </div>
 <div class="mov" id="trackModal">
@@ -985,7 +1012,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 <audio id="audio"></audio>
 
 <script>
-const API='https://sonaplay.onrender.com/api';
+const API=SONA_CONFIG.API;
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 // ngrok free tier shows an interstitial warning page on first browser contact
 // unless this header is present - without it, requests get HTML back instead
 // of JSON, breaking search/stream/download.
@@ -1022,8 +1050,8 @@ const audio=document.getElementById('audio');
 
 // SUPABASE AUTH + PLAYLISTS
 // TODO: replace with your real project URL + anon key from Supabase dashboard > Settings > API
-const SUPA_URL='https://ioukidprmfvkkoohlpmy.supabase.co';
-const SUPA_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlvdWtpZHBybWZ2a2tvb2hscG15Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0NjAxODEsImV4cCI6MjEwMjAzNjE4MX0.BMrmsC_DMDX8HP7CMyJ3O3EUOC8IWAvbBk7rE5o4wIA';
+const SUPA_URL=SONA_CONFIG.SUPA_URL;
+const SUPA_ANON_KEY=SONA_CONFIG.SUPA_ANON_KEY;
 const sb=window.supabase.createClient(SUPA_URL,SUPA_ANON_KEY);
 let session=null;
 let authMode='login'; // 'login' | 'signup'
@@ -1031,6 +1059,7 @@ let authMode='login'; // 'login' | 'signup'
 function toggleAuthMode(){
   authMode=authMode==='login'?'signup':'login';
   document.getElementById('agName').style.display=authMode==='signup'?'block':'none';
+  document.getElementById('agRegion').hidden=authMode!=='signup';
   document.getElementById('agSubmitBtn').textContent=authMode==='signup'?'Sign Up':'Log In';
   document.getElementById('agSwitch').innerHTML=authMode==='signup'
     ?'Already have an account? <span onclick="toggleAuthMode()">Log in</span>'
@@ -1045,11 +1074,14 @@ async function handleAuthSubmit(){
   const errEl=document.getElementById('agErr');
   errEl.textContent='';
   if(!email||!pass){errEl.textContent='Enter email and password';return;}
+  const region=document.getElementById('agRegion').value;
+  if(authMode==='signup'&&!region){errEl.style.color='var(--c)';errEl.textContent='Select your region';return;}
+  if(authMode==='signup'&&pass.length<8){errEl.style.color='var(--c)';errEl.textContent='Password needs at least 8 characters';return;}
   const btn=document.getElementById('agSubmitBtn');
   btn.disabled=true;btn.textContent='Please wait…';
   try{
     if(authMode==='signup'){
-      const{data,error}=await sb.auth.signUp({email,password:pass,options:{data:{display_name:name||email.split('@')[0]}}});
+      const{data,error}=await sb.auth.signUp({email,password:pass,options:{data:{display_name:name||email.split('@')[0],region}}});
       if(error)throw error;
       if(!data.session){
         errEl.style.color='var(--v)';
@@ -1171,11 +1203,30 @@ function playOfflineFromGate(){
   document.getElementById('main').classList.add('show');
   try{enterMain();}catch(e){console.error(e);}
 }
+/* region is required: asked once for Google sign-ins and older accounts */
+async function ensureRegion(){
+  try{
+    const{data:{user}}=await sb.auth.getUser();if(!user)return;
+    sb.rpc('touch_activity').then(()=>{},()=>{});
+    let reg=user.user_metadata&&user.user_metadata.region;
+    if(!reg){const{data}=await sb.from('profiles').select('region').eq('id',user.id).maybeSingle();reg=data&&data.region;}
+    if(!reg)document.getElementById('regionGate').style.display='flex';
+  }catch(e){}
+}
+async function saveRegion(){
+  const v=document.getElementById('rgSel').value,e=document.getElementById('rgErr');
+  if(!v){e.textContent='Select your region';return;}
+  const{data:{user}}=await sb.auth.getUser();
+  const a=await sb.auth.updateUser({data:{region:v}});
+  const b=await sb.from('profiles').update({region:v}).eq('id',user.id);
+  if(a.error||b.error){e.textContent='Could not save, try again';return;}
+  document.getElementById('regionGate').style.display='none';
+}
 function enterMain(){
   const sp=document.getElementById('splash');
   if(sp){sp.classList.add('hide');setTimeout(()=>sp.style.display='none',700);}
   document.getElementById('main').classList.add('show');
-  buildGrids();restorePrefs();updateSubs();updateOfflineBadge();
+  buildGrids();restorePrefs();updateSubs();updateOfflineBadge();ensureRegion();initNotifs();pullPrefsServer();
   refreshProfileRow();initInviteLink();refreshPremiumStatus();
   // Seed browser history so the back button navigates in-app pages
   // instead of immediately closing - without this cushion state, the
@@ -1348,8 +1399,8 @@ function gridCardHtml(t,i,qn){
       <div class="ov"><i class="ph-fill ph-play"></i></div>
     </div>
     <div class="cardText">
-      <div class="ct">${t.title||'Unknown'}</div>
-      <div class="ca gridArtist" onclick="event.stopPropagation();goToArtist('${(t.artist||'').replace(/'/g,"\\'")}')">${t.artist||''}</div>
+      <div class="ct">${esc(t.title||'Unknown')}</div>
+      <div class="ca gridArtist" onclick="event.stopPropagation();goToArtist('${(t.artist||'').replace(/'/g,"\\'")}')">${esc(t.artist||'')}</div>
     </div>
   </div>`;
 }
@@ -1462,8 +1513,8 @@ function renderCards(id,tracks,qn){
         <img src="${t.thumbnail||''}" loading="lazy" onerror="this.src='icons/icon-192.png';this.style.objectFit='cover'"/>
         <div class="ov"><i class="ph-fill ph-play"></i></div>
       </div>
-      <div class="ct">${t.title||'Unknown'}</div>
-      <div class="ca">${t.artist||''}</div>
+      <div class="ct">${esc(t.title||'Unknown')}</div>
+      <div class="ca">${esc(t.artist||'')}</div>
     </div>`).join('');
 }
 function renderTrend(tracks){
@@ -1476,7 +1527,7 @@ function tRow(t,i,qn){
   return`<div class="trow" onclick='play(${ts},window["${qn}"],${i})'>
     <div class="tn">${i+1}</div>
     <div class="tth"><img src="${t.thumbnail||''}" loading="lazy" onerror="this.src='icons/icon-192.png';this.style.objectFit='cover'"/></div>
-    <div class="ti"><div class="tt">${t.title||'Unknown'}${offline}</div><div class="ta">${t.artist||''}</div></div>
+    <div class="ti"><div class="tt">${esc(t.title||'Unknown')}${offline}</div><div class="ta">${esc(t.artist||'')}</div></div>
     <div class="td">${t.duration||''}</div>
     <div class="tm" onclick="event.stopPropagation();openOpts(${ts},window['${qn}'],${i},event)"><i class="ph ph-dots-three-vertical"></i></div>
   </div>`;
@@ -1603,8 +1654,8 @@ function mixCardHtml(m,i,qn){
       <img src="${m.thumbnail||''}" loading="lazy" onerror="this.style.display='none'"/>
       ${durStr?`<div class="mix-dur">${durStr}</div>`:''}
     </div>
-    <div class="ct">${m.title||'Unknown'}</div>
-    <div class="mix-dj">${m.artist||''}</div>
+    <div class="ct">${esc(m.title||'Unknown')}</div>
+    <div class="mix-dj">${esc(m.artist||'')}</div>
   </div>`;
 }
 
@@ -1648,7 +1699,7 @@ async function setChip(el,g){
   if(!tracks.length){el2.innerHTML='<div style="color:var(--m);padding:1rem;text-align:center">No results found</div>';return;}
   el2.innerHTML=tracks.map((t,i)=>tRow(t,i,'sTracks')).join('');
 }
-async function doSearch(q){
+async function doSearch(q){q=await fixTypo(q);
   saveToSearchHistory(q);
   const query=activeChip?`${q} ${activeChip}`:q;
   const el=document.getElementById('sResults');
@@ -2331,7 +2382,7 @@ async function loadLib(tab){
       }else{
         html+=data.map(p=>`<div class="pl-item" onclick="openPlaylist('${p.id}','${(p.name||'').replace(/'/g,"&#39;")}')">
           <div class="pl-icon"><i class="ph ph-playlist"></i></div>
-          <div><div class="pl-name">${p.name}</div><div class="pl-count">${p.playlist_tracks?.[0]?.count||0} songs</div></div>
+          <div><div class="pl-name">${esc(p.name)}</div><div class="pl-count">${p.playlist_tracks?.[0]?.count||0} songs</div></div>
         </div>`).join('');
       }
       el.innerHTML=html;
@@ -2574,7 +2625,7 @@ function renderFollowedList(){
       <i class="ph ph-x" style="color:var(--m)" onclick="event.stopPropagation();toggleFollow('${a.replace(/'/g,"\\'")}');renderFollowedList()"></i>
     </div>`).join('');
 }
-function savePrefs(){localStorage.setItem('sp',JSON.stringify(prefs));}
+function savePrefs(){localStorage.setItem('sp',JSON.stringify(prefs));syncPrefsServer();}
 function restorePrefs(){
   const qEl=document.querySelector(`#qualityGrid .pc[data-q="${prefs.quality||'high'}"]`);
   document.querySelectorAll('#qualityGrid .pc').forEach(el=>el.classList.remove('on'));
@@ -2601,7 +2652,106 @@ function updateSubs(){
 
 // MISC
 let navStack=['home'];
-let exitConfirmed=false;
+let exitConfirmed=false,lastBackAt=0;
+/* ---- INSTALL POPUP (slides from the top) ---- */
+let _ip=null,_ibShown=false;
+const _isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+const _standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+addEventListener('beforeinstallprompt',e=>{e.preventDefault();_ip=e;});
+addEventListener('appinstalled',()=>{_ip=null;hideInstall();});
+function hideInstall(){const b=document.getElementById('ibanner');if(b)b.style.display='none';}
+function dismissInstall(){hideInstall();try{localStorage.setItem('sona_ib_x',Date.now())}catch(e){}}
+async function doInstall(){if(!_ip)return;_ip.prompt();try{await _ip.userChoice}catch(e){}_ip=null;hideInstall();}
+function tryShowInstall(){
+  if(_ibShown||_standalone())return;
+  const x=+(localStorage.getItem('sona_ib_x')||0);if(Date.now()-x<3*864e5)return;
+  const m=document.getElementById('main');if(!m||!m.classList.contains('show'))return;
+  if(!_ip&&!_isIOS)return;
+  const b=document.getElementById('ibanner');
+  if(!_ip&&_isIOS){document.getElementById('ibSub').textContent='Tap Share, then Add to Home Screen';document.getElementById('ibBtn').style.display='none';}
+  b.style.display='block';_ibShown=true;
+}
+let _ibTry=0;const _ibT=setInterval(()=>{tryShowInstall();if(_ibShown||++_ibTry>40)clearInterval(_ibT)},2500);
+/* ---- NOTIFICATIONS (Supabase, realtime) ---- */
+let _nUid=null,_nRows=[];
+function b64u(k){const p='='.repeat((4-k.length%4)%4),b=(k+p).replace(/-/g,'+').replace(/_/g,'/'),x=atob(b);return Uint8Array.from([...x].map(c=>c.charCodeAt(0)))}
+function ago(d){const x=(Date.now()-new Date(d))/1000;return x<3600?Math.max(1,Math.floor(x/60))+' min ago':x<86400?Math.floor(x/3600)+' h ago':Math.floor(x/86400)+' d ago'}
+async function loadNotifs(){
+  try{const{data}=await sb.from('notifications').select('id,artist,video_id,title,body,thumbnail,kind,read,created_at').order('created_at',{ascending:false}).limit(30);
+    _nRows=data||[];const n=_nRows.filter(x=>!x.read).length,b=document.getElementById('bellBadge');
+    b.textContent=n>9?'9+':n;b.style.display=n?'flex':'none';
+    if(document.getElementById('notifModal').classList.contains('open'))renderNotifs();}catch(e){}
+}
+function renderNotifs(){
+  document.getElementById('notifList').innerHTML=_nRows.length?_nRows.map((n,i)=>`<div class="ntr" onclick="openNotif(${i})"><img src="${esc(n.thumbnail||'icons/icon-192.png')}" alt=""><div style="flex:1;min-width:0"><div style="font-weight:600">${n.kind==='broadcast'?esc(n.title):'New from '+esc(n.artist)}</div><div style="color:var(--m);font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(n.kind==='broadcast'?n.body:n.title)} · ${ago(n.created_at)}</div></div>${n.read?'':'<span class="ntd"></span>'}</div>`).join(''):'<div style="color:var(--m);text-align:center;padding:1.5rem">No notifications yet</div>';
+}
+function openNotifs(){document.getElementById('notifTog2').checked=!!prefs.releaseNotif&&'Notification' in window&&Notification.permission==='granted';openM('notifModal');renderNotifs();loadNotifs();}
+function openNotif(i){const n=_nRows[i];if(!n)return;
+  if(!n.read){n.read=true;sb.from('notifications').update({read:true}).eq('id',n.id).then(()=>loadNotifs());}
+  closeM('notifModal');
+  if(n.video_id){const t={videoId:n.video_id,title:n.title||'',artist:n.artist||'',thumbnail:n.thumbnail||''};play(t,[t],0);}
+}
+async function markAllRead(){await sb.from('notifications').update({read:true}).eq('read',false);await loadNotifs();renderNotifs();}
+async function initNotifs(){
+  const{data:{user}}=await sb.auth.getUser();if(!user||_nUid===user.id)return;_nUid=user.id;loadNotifs();
+  try{sb.channel('notif-'+user.id).on('postgres_changes',{event:'INSERT',schema:'public',table:'notifications',filter:'user_id=eq.'+user.id},()=>loadNotifs()).subscribe();}catch(e){}
+  setInterval(loadNotifs,90000);
+  if('serviceWorker' in navigator)navigator.serviceWorker.addEventListener('message',e=>{if(e.data&&e.data.play){const t={videoId:e.data.play,title:'',artist:'',thumbnail:''};play(t,[t],0);}});
+}
+async function enablePush(){
+  try{const k=SONA_CONFIG.VAPID_PUBLIC;if(!k||!('serviceWorker' in navigator)||!('PushManager' in window))return;
+    const reg=await navigator.serviceWorker.ready;let sub=await reg.pushManager.getSubscription();
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(k)});
+    const j=sub.toJSON(),{data:{user}}=await sb.auth.getUser();
+    await sb.from('push_subscriptions').upsert({user_id:user.id,endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth},{onConflict:'endpoint'});}catch(e){}
+}
+function syncNotifPref(on){sb.auth.getUser().then(({data:{user}})=>user&&sb.from('user_prefs').upsert({user_id:user.id,notify_new_songs:!!on,updated_at:new Date().toISOString()})).catch(()=>{});}
+/* follows and genres live in Supabase so the release job can see them */
+let _spT;
+function syncPrefsServer(){clearTimeout(_spT);_spT=setTimeout(async()=>{try{
+  const{data:{user}}=await sb.auth.getUser();if(!user)return;
+  const names=[...new Set((prefs.artists||[]).filter(Boolean))].slice(0,200);
+  await sb.from('user_prefs').upsert({user_id:user.id,genres:prefs.genres||[],updated_at:new Date().toISOString()});
+  const{data:cur}=await sb.from('follows').select('artist_name').eq('user_id',user.id);const have=new Set((cur||[]).map(x=>x.artist_name));
+  const add=names.filter(n=>!have.has(n)).map(n=>({user_id:user.id,artist_name:n,kind:'artist'}));
+  if(add.length)await sb.from('follows').upsert(add);
+  const del=[...have].filter(n=>!names.includes(n));
+  if(del.length)await sb.from('follows').delete().eq('user_id',user.id).in('artist_name',del);
+}catch(e){}},1500);}
+async function pullPrefsServer(){try{
+  const{data:{user}}=await sb.auth.getUser();if(!user)return;
+  const[{data:f},{data:p}]=await Promise.all([sb.from('follows').select('artist_name').eq('user_id',user.id),sb.from('user_prefs').select('genres').eq('user_id',user.id).maybeSingle()]);
+  prefs.artists=[...new Set([...(prefs.artists||[]),...(f||[]).map(x=>x.artist_name)])];
+  if((!prefs.genres||!prefs.genres.length)&&p&&p.genres&&p.genres.length)prefs.genres=p.genres;
+  localStorage.setItem('sp',JSON.stringify(prefs));try{updateSubs();}catch(e){}
+  syncPrefsServer();}catch(e){}}
+async function fixTypo(q){try{const r=await fetch(`${API}/suggest?q=${encodeURIComponent(q)}`);const d=await r.json();if(d.corrected)return d.corrected;}catch(e){}return q;}
+/* ---- EQUALIZER (Web Audio; built after a tap, resumed on every play) ---- */
+const EQF=[60,230,910,3600,14000],EQN=['60 Hz','230 Hz','910 Hz','3.6 kHz','14 kHz'];
+const EQP={'Flat':[0,0,0,0,0],'Bass boost':[8,5,0,0,0],'Vocal':[-2,0,4,3,0],'Afrobeats':[5,2,0,3,4],'Treble':[0,0,0,5,8]};
+let eqCtx=null,eqNodes=[],eqOn=false,eqGains=[0,0,0,0,0];
+try{const q=JSON.parse(localStorage.getItem('sona_eq')||'null');if(q){eqOn=!!q.on;eqGains=q.g||eqGains;}}catch(e){}
+function eqSave(){try{localStorage.setItem('sona_eq',JSON.stringify({on:eqOn,g:eqGains}));}catch(e){}}
+function eqBuild(){if(eqCtx)return true;try{const AC=window.AudioContext||window.webkitAudioContext;eqCtx=new AC();const src=eqCtx.createMediaElementSource(audio);
+  eqNodes=EQF.map((f,i)=>{const n=eqCtx.createBiquadFilter();n.type=i===0?'lowshelf':i===4?'highshelf':'peaking';n.frequency.value=f;n.Q.value=1;n.gain.value=0;return n;});
+  src.connect(eqNodes[0]);for(let i=0;i<4;i++)eqNodes[i].connect(eqNodes[i+1]);eqNodes[4].connect(eqCtx.destination);return true;}catch(e){eqCtx=null;return false;}}
+function eqApply(){if(!eqCtx)return;eqNodes.forEach((n,i)=>{n.gain.value=eqOn?eqGains[i]:0;});}
+function eqToggle(on){if(on&&!eqBuild()){document.getElementById('eqTog').checked=false;toast('Equalizer is not supported here');return;}
+  eqOn=on;if(eqCtx&&eqCtx.state==='suspended')eqCtx.resume();eqApply();eqSave();}
+function eqSet(i,v){eqGains[i]=+v;eqApply();eqSave();}
+function eqPreset(k){eqGains=EQP[k].slice();eqApply();eqSave();renderEq();}
+function renderEq(){document.getElementById('eqTog').checked=eqOn;
+  document.getElementById('eqPre').innerHTML=Object.keys(EQP).map(k=>`<button class="eqc" onclick="eqPreset('${k}')">${k}</button>`).join('');
+  document.getElementById('eqBands').innerHTML=EQN.map((l,i)=>`<div><input type="range" min="-12" max="12" step="1" value="${eqGains[i]}" oninput="eqSet(${i},this.value)" aria-label="${l}"><span>${l}</span></div>`).join('');}
+function openEq(){renderEq();openM('eqModal');}
+audio.addEventListener('play',()=>{if(eqOn&&!eqCtx){eqBuild();eqApply();}if(eqCtx&&eqCtx.state==='suspended')eqCtx.resume();});
+/* swipe the mini player left or right to skip */
+(function(){const m=document.getElementById('mini');if(!m)return;let x0=null;
+  m.addEventListener('touchstart',e=>{x0=e.touches[0].clientX;},{passive:true});
+  m.addEventListener('touchend',e=>{if(x0===null)return;const dx=e.changedTouches[0].clientX-x0;x0=null;if(Math.abs(dx)>70){m._sw=Date.now();dx<0?nextTrack():prevTrack();}});
+  m.addEventListener('click',e=>{if(Date.now()-(m._sw||0)<400)e.stopImmediatePropagation();},true);})();
+function exitHint(){let h=document.getElementById('exitHint');if(!h){h=document.createElement('div');h.id='exitHint';h.style.cssText='position:fixed;left:50%;bottom:calc(var(--nav) + 90px);transform:translateX(-50%);background:var(--t);color:var(--bg);padding:.6rem 1rem;border-radius:20px;font-size:.82rem;font-weight:500;z-index:9000;white-space:nowrap';h.textContent='Press back again to exit';document.body.appendChild(h);}h.style.display='block';clearTimeout(h._t);h._t=setTimeout(()=>h.style.display='none',2000);}
+
 function showPage(name,fromPopstate){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
@@ -2628,13 +2778,16 @@ window.addEventListener('popstate',(e)=>{
     // Already on Home with nothing left in our own stack - this is the
     // real "leaving the app" moment, so ask instead of just closing.
     history.pushState({sonaPage:'home'},'','#home'); // cushion so we can intercept the actual exit choice
-    openM('exitConfirmModal');
+    const now=Date.now();
+    if(now-lastBackAt<2000){openM('exitConfirmModal');}else{exitHint();}
+    lastBackAt=now;
   }
   // if exitConfirmed is true: do nothing here, let the next natural back
   // gesture proceed - a web app genuinely can't force-close a tab the
   // person opened themselves, this is the honest limit of what's possible
 });
 function confirmExitApp(){
+  try{audio.pause();}catch(e){}
   exitConfirmed=true;
   closeM('exitConfirmModal');
   // A single history.back() only undoes one step, but by now we may have
@@ -2643,6 +2796,7 @@ function confirmExitApp(){
   // leaves instead of landing on some earlier in-app screen.
   history.go(-(navStack.length+1));
 }
+function minimizeApp(){exitConfirmed=true;closeM('exitConfirmModal');history.go(-(navStack.length+1));}
 async function checkNewFromFollowed(){
   if(!prefs.artists.length)return;
   if(Notification.permission!=='granted')return;
@@ -2662,10 +2816,10 @@ async function checkNewFromFollowed(){
   localStorage.setItem('sona_lastseen',JSON.stringify(lastSeen));
 }
 
-function toggleNotif(on){
+function toggleNotif(on){syncNotifPref(on);
   if(on){
     Notification.requestPermission().then(p=>{
-      if(p==='granted'){prefs.releaseNotif=true;savePrefs();toast('Notifications on!');checkNewFromFollowed();}
+      if(p==='granted'){prefs.releaseNotif=true;savePrefs();toast('Notifications on!');enablePush();checkNewFromFollowed();}
       else{document.getElementById('notifTog').checked=false;prefs.releaseNotif=false;savePrefs();toast('Blocked by browser');}
     });
   }else{
@@ -2748,8 +2902,8 @@ async function saveProfile(){
   const name=document.getElementById('profileNameInput').value.trim();
   const email=document.getElementById('profileEmailInput').value.trim();
   const newPassword=document.getElementById('profilePasswordInput').value;
-  if(newPassword&&newPassword.length<6){
-    msg.style.color='var(--c)';msg.textContent='Password must be at least 6 characters.';
+  if(newPassword&&newPassword.length<8){
+    msg.style.color='var(--c)';msg.textContent='Password must be at least 8 characters.';
     return;
   }
   btn.disabled=true;btn.textContent='Saving…';msg.textContent='';

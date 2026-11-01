@@ -1,118 +1,40 @@
-# Sona Play — Full Project & Setup Guide
-
-## What's in this zip
+# Sona Play (Version 3, Skyline Technologies)
 
 ```
-sona-play/
-├── index.html          <- the app itself (frontend, open in a browser)
-└── backend/
-    ├── app.py           <- Flask API (search, stream, download)
-    ├── requirements.txt
-    ├── Dockerfile        <- for deploying on Render
-    └── .dockerignore
+index.html config.js manifest.json sw.js _headers netlify.toml   frontend (Netlify)
+backend/   app.py security.py Dockerfile requirements.txt        API (Render)
+mobile/    Expo React Native app (see mobile/README.md)
+supabase/  upgrade/  001_schema.sql, 002_region_admin_analytics.sql   run on your EXISTING project
+           fresh/    full_setup.sql (001+002 in one file), reset_public_schema.sql
+           config.toml                                             auth settings for the Supabase CLI
 ```
 
-How it works: `index.html` is a single-page app that calls the API in
-`backend/app.py` to search for songs (SoundCloud first, YouTube fallback),
-stream them, and download them. First play of any song downloads it once
-into a server-side cache; every play after that (by anyone) is instant.
+## Supabase: pick one
+- **Existing project:** SQL Editor, run `upgrade/001_schema.sql`, then `upgrade/002_region_admin_analytics.sql`. Both only add what is missing.
+- **New or wiped project:** run `fresh/full_setup.sql` once. To wipe an old project first, run `fresh/reset_public_schema.sql` (it deletes all public tables and data; users in Authentication stay).
+- Always run 001 before 002. Re-running 001 later removes the grants 002 adds, so run 002 again after it.
 
----
+## Auth settings (Dashboard > Authentication)
+1. Providers: Email on with **Confirm email** on. Google on (add your Client ID and Secret).
+2. URL Configuration: Site URL = your Netlify URL. Redirect URLs: add `https://YOUR-SITE.netlify.app/**`.
+3. Password minimum length 8 (the app now checks 8).
+4. Optional: turn on CAPTCHA protection (Authentication > Attack Protection).
 
-## PART 1 — Run it on your phone (Termux) to test
+## Admin (later)
+Make yourself admin once (SQL Editor): `insert into admins (user_id) select id from auth.users where email = 'you@email.com';`
+The admin panel will call these functions: `admin_overview`, `admin_signups('day'|'week'|'month', n)`, `admin_active(...)`, `admin_by_region`, `admin_list_users`, `admin_send_broadcast(title, body, region)`. They check `is_admin()` inside, so normal users get "not allowed".
 
-You need **3 Termux sessions running at the same time**. Open a new one by
-swiping from the left edge of the screen, or tap the hamburger menu → New
-session.
+## Region
+Sign-up now requires a region. Google sign-ins and older accounts are asked once on first open. It is stored in the profile and used for the admin region charts.
 
-### Session 1 — install + start the backend
+## Backend (Render) and frontend (Netlify)
+Backend variables are in `.env.example`; `ALLOWED_ORIGINS` must be your Netlify URL; leave `FLASK_DEBUG` unset. Edit `config.js` (API and Supabase URL and anon key) and the `connect-src` hosts in `_headers`. The service_role key lives on Render only.
 
-```bash
-cd backend
-pip install -r requirements.txt --break-system-packages
-pkg install ffmpeg -y
-python app.py
-```
+## Notifications setup (new release alerts, bell, push)
+1. Run the Supabase SQL (002 turns on realtime for the bell).
+2. Render variables: `SUPABASE_SERVICE_ROLE_KEY`, `CRON_SECRET`, `VAPID_PRIVATE_KEY`, `VAPID_EMAIL`. Generate keys with `npx web-push generate-vapid-keys`, and put the PUBLIC key in `config.js` as `VAPID_PUBLIC`.
+3. Free Render instances sleep, so use an external scheduler (for example cron-job.org) every 30 minutes: `POST https://YOUR-API/api/jobs/check-releases` with header `X-Cron-Secret: <CRON_SECRET>`.
+Follows and genres are saved to Supabase automatically, so the job knows who follows whom. The first time an artist is checked it only records their latest song, so nobody gets a flood of old releases.
 
-Leave this running. It's now serving on `localhost:5000`.
-
-### Session 2 — expose it to the internet
-
-```bash
-npm install -g localtunnel
-npx localtunnel --port 5000 --subdomain xavitech-sona
-```
-
-Leave this running too. This is what makes `https://xavitech-sona.loca.lt`
-work — the URL already hardcoded into `index.html`.
-
-**If that subdomain is ever taken by someone else on a given day**,
-localtunnel gives you a different random one instead — check the terminal
-output for the actual URL it gives you, and if it's not `xavitech-sona`,
-update line 743 of `index.html` to match.
-
-### Session 3 — serve the HTML file
-
-```bash
-cd /path/to/sona-play      # wherever you put this unzipped folder
-python -m http.server 8080
-```
-
-### Open the app
-
-On your phone, open **Chrome** and go to:
-```
-http://localhost:8080/index.html
-```
-
-### Before assuming anything's broken — test the backend directly first
-
-```bash
-curl https://xavitech-sona.loca.lt/api/health
-curl "https://xavitech-sona.loca.lt/api/search?q=Burna+Boy&limit=5"
-```
-
-If both return real JSON (not an error), the backend's working and any
-remaining issue is in the frontend/browser, not the API.
-
----
-
-## PART 2 — Deploy for real (Render, so it doesn't depend on your phone)
-
-1. Push the `backend/` folder to your GitHub repo (`helalink-site/sonaplay`)
-2. Render dashboard → **New → Web Service** → connect the repo
-3. Set **Environment: Docker** (not Python) — this picks up `Dockerfile`,
-   which installs ffmpeg. Without this, downloads silently fail.
-4. Add a **persistent disk** (Render dashboard → your service → Disks →
-   Add Disk), mount it at `/var/data`
-5. Add environment variable: `CACHE_DIR=/var/data/cache`
-   — without this, the song cache wipes on every redeploy
-6. (Optional, recommended) Add your `cookies.txt` as a **Secret File** at
-   `/etc/secrets/cookies.txt`, then add env var:
-   `COOKIE_FILE=/etc/secrets/cookies.txt`
-7. Deploy. Wait for the build to finish.
-8. Copy your Render URL (e.g. `https://sonaplay.onrender.com`)
-9. In `index.html`, update line 743:
-   ```js
-   const API='https://sonaplay.onrender.com/api';
-   ```
-10. Re-host `index.html` wherever you're serving the frontend from
-    (GitHub Pages, Render static site, etc.)
-
-### Known behavior on Render's free tier
-The service sleeps after 15 minutes of no traffic. The first request after
-that takes 20-50 seconds to wake up — this is Render's free-tier behavior,
-not a bug. Upgrade to a paid instance if this matters for real users.
-
----
-
-## Things to know going in (not bugs, just how this is built)
-
-- **First play of any song** takes a few seconds (server downloads it once)
-- **SoundCloud catalog gaps**: big commercial hits often aren't there —
-  YouTube fills in automatically when that happens
-- **Cache grows over time** with no automatic cleanup yet — worth adding
-  before real users pile up storage
-- **Cookies expire** — if search/stream suddenly stop working after
-  working fine, re-export a fresh `cookies.txt` before assuming the code
-  broke
+## Known limits
+Un-following on one device can be undone by another device that still has the old list. The mobile app (`mobile/`) has not been run on a device and has no downloads, playlists or equalizer yet. The admin panel is kept separate for later.

@@ -4,3 +4,4 @@ yt-dlp==2026.8.19
 requests
 gunicorn
 mutagen
+pywebpush==2.0.0
