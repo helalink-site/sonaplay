@@ -428,6 +428,11 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
 #authGate .ag-switch,#welcomeGate .ag-switch,#djApplyGate .ag-switch{text-align:center;margin-top:1rem;font-size:.82rem;color:var(--m);}
 #authGate .ag-switch span,#welcomeGate .ag-switch span,#djApplyGate .ag-switch span{color:var(--v);cursor:pointer;font-weight:600;}
 #authGate .ag-err{color:var(--c);font-size:.78rem;margin-top:.4rem;min-height:1em;}
+.pw-wrap{position:relative;width:100%}
+#authGate .pw-wrap input{padding-right:2.8rem}
+.pw-eye{position:absolute;right:.45rem;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--m);cursor:pointer;padding:.45rem;display:flex;align-items:center;justify-content:center;line-height:0}
+#authGate .pw-wrap .pw-eye{top:calc(50% - .35rem)}
+.pw-eye:active{color:var(--t)}
 .pl-item{display:flex;align-items:center;gap:.8rem;padding:.7rem .4rem;border-radius:12px;cursor:pointer;}
 .pl-item:hover{background:var(--s2);}
 .pl-icon{width:44px;height:44px;border-radius:10px;background:var(--g);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1.1rem;flex-shrink:0;}
@@ -476,7 +481,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
   <div class="ag-logo">Sona Play</div>
   <div class="ag-box">
     <input type="email" id="agEmail" placeholder="Email" autocomplete="email"/>
-    <input type="password" id="agPass" placeholder="Password" autocomplete="current-password"/>
+    <div class="pw-wrap"><input type="password" id="agPass" placeholder="Password" autocomplete="current-password"/><button type="button" class="pw-eye" onclick="togglePw('agPass',this)" aria-label="Show password"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
     <input type="text" id="agName" placeholder="Display name" style="display:none"/>
     <select id="agRegion" aria-label="Region" style="width:100%;padding:.8rem 1rem;border-radius:12px;background:var(--s2);border:none;color:var(--t);font:inherit;margin-bottom:.7rem" hidden><option value="">Select your region</option><option>Kenya</option><option>Tanzania</option><option>Uganda</option><option>Rwanda</option><option>Burundi</option><option>DR Congo</option><option>Ethiopia</option><option>Somalia</option><option>South Sudan</option><option>Nigeria</option><option>Ghana</option><option>South Africa</option><option>Zambia</option><option>Zimbabwe</option><option>Mozambique</option><option>Malawi</option><option>Other Africa</option><option>United Kingdom</option><option>United States</option><option>Canada</option><option>Other Europe</option><option>Middle East</option><option>Asia</option><option>Rest of world</option></select>
     <button class="ag-submit" id="agSubmitBtn" onclick="handleAuthSubmit()">Log In</button>
@@ -872,7 +877,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--t);min-heig
     <div style="font-size:.72rem;color:var(--m);margin-bottom:1rem;">Changing your email sends a confirmation link before it takes effect.</div>
     <div style="margin-bottom:.4rem">
       <label style="font-size:.75rem;color:var(--m);display:block;margin-bottom:.3rem;">New Password</label>
-      <input type="password" id="profilePasswordInput" placeholder="Leave blank to keep current password" style="width:100%;padding:.7rem .9rem;border-radius:11px;background:var(--s2);border:none;color:var(--t);font-size:.9rem;"/>
+      <div class="pw-wrap"><input type="password" id="profilePasswordInput" placeholder="Leave blank to keep current password" style="width:100%;padding:.7rem 2.8rem .7rem .9rem;border-radius:11px;background:var(--s2);border:none;color:var(--t);font-size:.9rem;"/><button type="button" class="pw-eye" onclick="togglePw('profilePasswordInput',this)" aria-label="Show password"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
     </div>
     <div style="font-size:.72rem;color:var(--m);margin-bottom:1rem;">At least 8 characters. Only fill this in if you want to change it.</div>
     <div id="profileSaveMsg" style="font-size:.8rem;margin-bottom:.6rem;"></div>
@@ -1067,6 +1072,15 @@ function toggleAuthMode(){
   document.getElementById('agErr').textContent='';
 }
 
+var PW_EYE='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+var PW_EYE_OFF='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0112 19c-7 0-11-7-11-7a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 7 11 7a18.5 18.5 0 01-2.16 3.19M14.12 14.12a3 3 0 11-4.24-4.24"/><path d="M1 1l22 22"/></svg>';
+function togglePw(id,btn){
+  var i=document.getElementById(id); if(!i)return;
+  var show=i.type==='password';
+  i.type=show?'text':'password';
+  btn.innerHTML=show?PW_EYE_OFF:PW_EYE;
+  btn.setAttribute('aria-label',show?'Hide password':'Show password');
+}
 async function handleAuthSubmit(){
   const email=document.getElementById('agEmail').value.trim();
   const pass=document.getElementById('agPass').value;
