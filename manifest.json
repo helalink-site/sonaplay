@@ -1,7 +1,7 @@
 {
   "name": "Sona Play",
   "short_name": "Sona Play",
-  "description": "Sona Play \u2014 stream and download music",
+  "description": "Feel every beat.",
   "start_url": "/?source=pwa",
   "scope": "/",
   "id": "/",
@@ -43,7 +43,7 @@
   "screenshots": [
     {
       "src": "images/screenshots/screenshot-1.jpg",
-      "sizes": "719x1404",
+      "sizes": "720x1486",
       "type": "image/jpeg",
       "form_factor": "narrow",
       "label": "Home"
