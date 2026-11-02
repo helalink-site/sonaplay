@@ -1012,6 +1012,116 @@ def _push(user_ids, payload):
     return sent
 
 
+def _push_pending_broadcasts():
+    """Send phone notifications for admin broadcasts not pushed yet. Returns how many rows were handled."""
+    pend = _sb("GET", "notifications?kind=eq.broadcast&pushed=eq.false&select=id,user_id,title,body&limit=2000").json()
+    if not isinstance(pend, list):
+        return 0
+    groups = {}
+    for n in pend:
+        groups.setdefault((n["title"], n["body"]), []).append(n)
+    for (title, body), items in groups.items():
+        _push([i["user_id"] for i in items], {"kind": "broadcast", "title": title, "body": body})
+        _sb("PATCH", f"notifications?id=in.({','.join(i['id'] for i in items)})", json={"pushed": True})
+    return len(pend)
+
+
+def _admin_user(req):
+    """The Supabase user if the bearer token belongs to an admin (the database's is_admin() decides)."""
+    auth = req.headers.get("Authorization", "")
+    if not auth.startswith("Bearer ") or not SUPABASE_URL:
+        return None
+    try:
+        h = {"Authorization": auth, "apikey": SUPABASE_ANON_KEY}
+        u = requests.get(f"{SUPABASE_URL}/auth/v1/user", headers=h, timeout=8)
+        if u.status_code != 200:
+            return None
+        r = requests.post(f"{SUPABASE_URL}/rest/v1/rpc/is_admin", headers={**h, "Content-Type": "application/json"}, json={}, timeout=8)
+        return u.json() if r.status_code == 200 and r.json() is True else None
+    except Exception:
+        return None
+
+
+def _auth_admin(method, path, **kw):
+    key = SUPABASE_SERVICE_ROLE_KEY
+    h = {"apikey": key, "Authorization": "Bearer " + key, "Content-Type": "application/json"}
+    return requests.request(method, f"{SUPABASE_URL}/auth/v1/admin/{path}", headers=h, timeout=20, **kw)
+
+
+@app.post("/api/admin/test-alert")
+def admin_test_alert():
+    me = _admin_user(request)
+    if not me:
+        return jsonify({"error": "unauthorized"}), 401
+    uid = me.get("id")
+    title, body = "Test alert", "If you can read this, alerts work."
+    saved = False
+    try:
+        r = _sb("POST", "notifications", json=[{"user_id": uid, "kind": "broadcast", "title": title, "body": body, "pushed": True}])
+        saved = r.status_code in (200, 201, 204)
+    except Exception:
+        pass
+    devices = 0
+    try:
+        d = _sb("GET", f"push_subscriptions?user_id=eq.{uid}&select=id").json()
+        devices = len(d) if isinstance(d, list) else 0
+    except Exception:
+        pass
+    sent = _push([uid], {"kind": "broadcast", "title": title, "body": body})
+    return jsonify({"saved": saved, "push_ready": bool(VAPID_PRIVATE_KEY), "devices": devices, "push_sent": sent})
+
+
+@app.post("/api/admin/push-now")
+def admin_push_now():
+    if not _admin_user(request):
+        return jsonify({"error": "unauthorized"}), 401
+    return jsonify({"pushed_rows": _push_pending_broadcasts()})
+
+
+@app.post("/api/admin/user-create")
+def admin_user_create():
+    if not _admin_user(request):
+        return jsonify({"error": "unauthorized"}), 401
+    if not SUPABASE_SERVICE_ROLE_KEY:
+        return jsonify({"error": "SUPABASE_SERVICE_ROLE_KEY not configured"}), 500
+    b = request.get_json(silent=True) or {}
+    email = str(b.get("email", "")).strip().lower()
+    password = str(b.get("password", ""))
+    name = str(b.get("display_name", "")).strip()[:60] or email.split("@")[0]
+    if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", email):
+        return jsonify({"error": "Enter a valid email"}), 400
+    if len(password) < 8:
+        return jsonify({"error": "Password must be at least 8 characters"}), 400
+    r = _auth_admin("POST", "users", json={"email": email, "password": password, "email_confirm": True,
+                                           "user_metadata": {"display_name": name}})
+    if r.status_code not in (200, 201):
+        try:
+            msg = r.json().get("msg") or r.json().get("message") or r.text
+        except Exception:
+            msg = r.text
+        return jsonify({"error": str(msg)[:200]}), 400
+    return jsonify({"ok": True, "id": r.json().get("id")})
+
+
+@app.post("/api/admin/user-delete")
+def admin_user_delete():
+    me = _admin_user(request)
+    if not me:
+        return jsonify({"error": "unauthorized"}), 401
+    uid = str((request.get_json(silent=True) or {}).get("id", ""))
+    if not re.match(r"^[0-9a-fA-F-]{36}$", uid):
+        return jsonify({"error": "bad id"}), 400
+    if uid == me.get("id"):
+        return jsonify({"error": "You cannot delete your own admin account here"}), 400
+    adm = _sb("GET", f"admins?user_id=eq.{uid}&select=user_id").json()
+    if isinstance(adm, list) and adm:
+        return jsonify({"error": "That user is an admin. Remove their admin rights first."}), 400
+    r = _auth_admin("DELETE", f"users/{uid}")
+    if r.status_code not in (200, 204):
+        return jsonify({"error": f"delete failed: {r.text[:160]}"}), 502
+    return jsonify({"ok": True})
+
+
 @app.post("/api/jobs/check-releases")
 def job_check_releases():
     if not CRON_SECRET or not hmac.compare_digest(request.headers.get("X-Cron-Secret", ""), CRON_SECRET):
@@ -1046,14 +1156,8 @@ def job_check_releases():
                 "thumbnail": t.get("thumbnail"), "kind": "release", "pushed": True} for u in users])
             _push(users, {"artist": artist, "title": t.get("title"), "video_id": vid, "thumbnail": t.get("thumbnail")})
             new_songs += 1
-    pend = _sb("GET", "notifications?kind=eq.broadcast&pushed=eq.false&select=id,user_id,title,body&limit=1000").json()
-    groups = {}
-    for n in pend:
-        groups.setdefault((n["title"], n["body"]), []).append(n)
-    for (title, body), items in groups.items():
-        _push([i["user_id"] for i in items], {"kind": "broadcast", "title": title, "body": body})
-        _sb("PATCH", f"notifications?id=in.({','.join(i['id'] for i in items)})", json={"pushed": True})
-    return jsonify({"artists_checked": min(len(by), 40), "new_songs": new_songs, "broadcasts_pushed": len(pend)})
+    pend = _push_pending_broadcasts()
+    return jsonify({"artists_checked": min(len(by), 40), "new_songs": new_songs, "broadcasts_pushed": pend})
 
 
 if __name__ == "__main__":

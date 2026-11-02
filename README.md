@@ -1,4 +1,4 @@
-# Sona Play (Version 3, Skyline Technologies)
+# Sona Play (Version 3, Skyline Technologies) , release v6
 
 ```
 index.html config.js manifest.json sw.js _headers netlify.toml   frontend (Netlify)
@@ -10,8 +10,8 @@ supabase/  upgrade/  001_schema.sql, 002_region_admin_analytics.sql   run on you
 ```
 
 ## Supabase: pick one
-- **Existing project:** SQL Editor, run `upgrade/001_schema.sql`, then `upgrade/002_region_admin_analytics.sql`. Both only add what is missing.
-- **New or wiped project:** run `fresh/full_setup.sql` once. To wipe an old project first, run `fresh/reset_public_schema.sql` (it deletes all public tables and data; users in Authentication stay).
+- **Existing project:** SQL Editor, run in this order: `upgrade/001_schema.sql`, `002_region_admin_analytics.sql`, `003_admin_extras.sql`, `004_legal_invites_users.sql`. Each only adds what is missing and is safe to run again. If you only have 001-003 already, run just **004**.
+- **New or wiped project:** run `fresh/full_setup.sql` once (it now includes 001 to 004). To wipe an old project first, run `fresh/reset_public_schema.sql` (it deletes all public tables and data; users in Authentication stay).
 - Always run 001 before 002. Re-running 001 later removes the grants 002 adds, so run 002 again after it.
 
 ## Auth settings (Dashboard > Authentication)
@@ -38,3 +38,33 @@ Follows and genres are saved to Supabase automatically, so the job knows who fol
 
 ## Known limits
 Un-following on one device can be undone by another device that still has the old list. The mobile app (`mobile/`) has not been run on a device and has no downloads, playlists or equalizer yet. The admin panel is kept separate for later.
+
+
+## What v6 adds
+- Google logo on the sign-in screen. The play and pause buttons (player and mini player) show a spinner while a song loads
+- Alerts are live: the bell, the Alerts page and a banner update the moment an alert (new song or admin message) is created. Phone push also works when the app is closed
+- Share uses your own link `https://YOUR-SITE/?play=VIDEOID&t=Title` with the text "Title by Artist, on Sona Play". No `index.html` in it
+- Install prompt on the website without screenshots (manifest `screenshots` removed). It returns after 3 days if dismissed. iPhone shows the Add to Home Screen steps
+- Settings > Invite friends: a link with the user's username `https://YOUR-SITE/?ref=username`. New users who open it are linked to the inviter (admin shows Top inviters)
+- Music keeps playing when the app is minimised (lock-screen and notification controls). The exit box says Minimise or Exit; only Exit stops the music
+- Downloads show real progress (cover fills, then a check)
+- Admin panel: add users, delete users, edit Privacy Policy and Terms (type or upload a .txt), send alerts, top inviters. See below
+
+## Admin panel (`/admin`)
+Log in with an admin account (see "Admin (later)" above to make yourself admin). Tabs: Overview, Regions, Users (add / delete), Broadcast, Settings, Legal.
+- Add and delete users call the backend, so Render needs `SUPABASE_SERVICE_ROLE_KEY`. The backend checks that you are an admin before it does anything
+- Broadcast: apps that are open show it instantly; the backend sends the phone push straight away
+- Legal: saved text shows in the app, and on `/privacy` and `/terms`
+
+## Push on phones (needs once)
+`npx web-push generate-vapid-keys`; PUBLIC key into `config.js` (`VAPID_PUBLIC`), PRIVATE key and `VAPID_EMAIL` on Render. Add `pywebpush` to `backend/requirements.txt` if it is not there.
+
+## Not tested here
+The app was run in a test browser with simulated Supabase and API answers. It was not run against your real Supabase, YouTube or a real phone, and the new SQL file was not run on a real database.
+
+## v6.1 fixes
+- Covers no longer draw over the mini player and bottom bar (stacking order fixed)
+- Real connection check: when data is on but there is no usable connection, the app shows "No internet connection" (Try again / My downloads) or "Could not load songs" instead of empty headings, hides empty sections and Explore links, and recovers by itself when the connection returns
+- No more welcome screen when the app opens without a connection; the saved login is restored as soon as the connection is back
+- Music resumes if the system pauses it, reconnects a broken stream (3 tries), and a pause you press yourself is respected
+- Admin > Broadcast > "Send a test to my phone" shows whether saving, live delivery and push are ready

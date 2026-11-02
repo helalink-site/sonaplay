@@ -53,5 +53,8 @@ a{color:#6C63FF;}
 <h2>Contact Us</h2>
 <p>If you have questions about this privacy policy, contact us at: <strong>xavitech8@gmail.com</strong></p>
 
+<script src="config.js"></script><script>(function(){var C=window.SONA_CONFIG;if(!C||!C.SUPA_URL)return;function e(x){return String(x).replace(/[&<>"']/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+fetch(C.SUPA_URL+'/rest/v1/legal_docs?kind=eq.privacy&select=content',{headers:{apikey:C.SUPA_ANON_KEY}}).then(function(r){return r.json()}).then(function(d){if(!d[0]||!d[0].content)return;var m=document.querySelector('main')||document.body;
+m.innerHTML=d[0].content.split(/\n{2,}/).map(function(b){b=b.trim();if(!b)return '';if(/^#{1,3}\s/.test(b))return '<h2>'+e(b.replace(/^#{1,3}\s*/,''))+'</h2>';var ls=b.split('\n');if(ls.every(function(l){return /^[-*]\s/.test(l)}))return '<ul>'+ls.map(function(l){return '<li>'+e(l.replace(/^[-*]\s*/,''))+'</li>'}).join('')+'</ul>';return '<p>'+e(b).replace(/\n/g,'<br>')+'</p>'}).join('')}).catch(function(){})})()</script>
 </body>
 </html>
