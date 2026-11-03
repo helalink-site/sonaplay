@@ -7,8 +7,7 @@
   "id": "/",
   "display": "standalone",
   "display_override": [
-    "standalone",
-    "minimal-ui"
+    "standalone"
   ],
   "orientation": "portrait",
   "background_color": "#0A0A0F",

@@ -528,7 +528,7 @@ function obDone(save){if(save){GN=OG.slice();REG=OR}document.getElementById('onb
 function showAuth(){document.getElementById('auth').classList.add('on')}
 function hideAuth(){document.getElementById('auth').classList.remove('on')}
 history.replaceState({s:'exit'},'','#exit');history.pushState({s:'home'},'','#home');
-window.addEventListener('popstate',function(e){if(shPushed){shPushed=false;hideSheets();return}if(e.state&&e.state.s==='exit')history.pushState({s:'home'},'','#home');backPress()});
+window.addEventListener('popstate',function(e){if(shPushed){shPushed=false;hideSheets();return}history.pushState({s:'trap'},'','#'+tab);backPress()});
 var libMode='d',liked={0:1},PL=[{n:'Gym mix',ids:[0,2,5]},{n:'Late night',ids:[3,4]}];
 function libHtml(){if(libMode==='l'){var l=T.filter(function(t){return liked[t.id]});return l.length?l.map(row).join(''):'<div class="sub" style="padding:24px 0">Nothing here yet</div>'}return PL.map(function(p,i){return '<div class="row" onclick="openPl('+i+')"><div class="art md" style="--h:'+(40+i*110)+'"><i class="g" style="display:none"></i><i class="cl"></i>'+I('plist',24)+'</div><div class="mi"><b>'+p.n+'</b><span><em>'+p.ids.length+' songs</em></span></div></div>'}).join('')+'<button class="link" onclick="newPl()">+ New playlist</button>'}
 function libTab(k){libMode=k;['d','l','p'].forEach(function(x){document.getElementById('lt-'+x).classList.toggle('on',x===k)});render()}
@@ -901,7 +901,7 @@ var tokU=stored();if(tokU)ge('hero').classList.remove('on');
 var _fh7=fitHome;fitHome=function(){if(SPL||!user){ge('netMsg').classList.remove('on');return}_fh7()};
 var _al7=afterLogin;afterLogin=function(u){if(AL&&user&&user.id===u.id)return;AL=true;_al7(u);subRT()};
 var _so7=signOut;signOut=function(){AL=false;if(RT&&sb){try{sb.removeChannel(RT)}catch(e){}RT=null}_so7()};
-function waitFeeds(cb){var n=0,iv=setInterval(function(){if(HOTQ.length||NEWQ.length||TRQ.length||++n>16){clearInterval(iv);cb()}},500)}
+function waitFeeds(cb){var n=0,iv=setInterval(function(){if(HOTQ.length||NEWQ.length||TRQ.length||++n>40){clearInterval(iv);cb()}},500)}
 (function(){if(!sb){ge('hero').classList.add('on');hideSplash();return}var t=setTimeout(function(){if(tokU&&!user)afterLogin(tokU);hideSplash()},7000);
 sb.auth.getSession().then(function(r){clearTimeout(t);var s=r.data&&r.data.session;if(s){if(!user)afterLogin(s.user);waitFeeds(hideSplash)}else if(tokU&&!navigator.onLine){afterLogin(tokU);hideSplash()}else{ge('hero').classList.add('on');hideSplash()}},function(){clearTimeout(t);if(tokU){if(!user)afterLogin(tokU)}else ge('hero').classList.add('on');hideSplash()})})();
 /* song loading ring + faster start */
@@ -926,8 +926,8 @@ homeFeeds=function(anim){hotDraw();rotInit(HS.n,NEWQ);rotInit(HS.t,TRQ);ge('newL
 function rotTick(R,Q,box){if(Q.length<5||document.hidden||tab!=='home')return;rotInit(R,Q);var sl=[0,1,2,3].filter(function(s){return s!==R.k});sl.forEach(function(s){R.S[s]=R.nx%Q.length;R.nx++});R.k=(R.k+1)%4;var kids=ge(box).children;sl.forEach(function(s){var el=kids[s];if(!el)return;var tmp=document.createElement('div');tmp.innerHTML=gcard(T[Q[R.S[s]]]);var nu=tmp.firstChild;nu.classList.add('fadein');el.replaceWith(nu)})}
 feedTick=function(){};
 setInterval(function(){if(HOTQ.length>1&&!document.hidden&&tab==='home'){HS.hot=(HS.hot+1)%HOTQ.length;hotDraw();ge('hotBox').firstChild.classList.add('fadein')}},15000);
-setInterval(function(){rotTick(HS.n,NEWQ)},10000);
-setTimeout(function(){setInterval(function(){rotTick(HS.t,TRQ)},10000)},5000);
+setInterval(function(){rotTick(HS.n,NEWQ,'newList')},10000);
+setTimeout(function(){setInterval(function(){rotTick(HS.t,TRQ,'trList')},10000)},5000);
 gcard=function(t){return '<div class="gc" onclick="play('+t.id+')"><div class="gcw">'+art(t,'sq')+'</div><b>'+t.t+'</b><span class="sub" style="display:flex;gap:4px;align-items:center">'+badge()+t.a+'</span></div>'};
 var _ex7=explore;explore=function(k){_ex7(k);ge('exList').classList.toggle('num',k==='tr')};
 /* shuffle and repeat with visible state */
@@ -1020,6 +1020,29 @@ function swapBlob(){var t=T[cur];if(!t||BG.vid!==t.vid||!BG.blob||au._sw===t.vid
 startAu=function(u){au._sw=null;au.src=u;au.play().catch(function(){});mediaSess();cacheTrack(T[cur],u)};
 document.addEventListener('visibilitychange',function(){if(document.hidden)swapBlob()});
 setInterval(function(){if(playing&&au.duration&&isFinite(au.duration)&&'mediaSession' in navigator&&navigator.mediaSession.setPositionState){try{navigator.mediaSession.setPositionState({duration:au.duration,position:Math.min(au.currentTime,au.duration),playbackRate:1})}catch(e){}}},1000);
+
+/* ===== v9: instant songs from cache, progressive loading, reliable back button ===== */
+function cpk(i){var t=T[i];return[t.vid,t.t,t.a,t.g]}
+function feedSave(){try{localStorage.sona_feed=JSON.stringify({H:HOTQ.map(cpk),N:NEWQ.map(cpk),T:TRQ.map(cpk),F:FY.map(cpk)})}catch(e){}}
+function feedLoad(){try{var o=JSON.parse(localStorage.sona_feed||'null');if(!o)return false;var m=function(a){return(a||[]).map(function(x){return addT({videoId:x[0],title:x[1],artist:x[2]},x[3]).id})};HOTQ=m(o.H);NEWQ=m(o.N);TRQ=m(o.T);FY=m(o.F);return HOTQ.length>0||NEWQ.length>0}catch(e){return false}}
+function paint(){HS.n.q=-1;HS.t.q=-1;homeFeeds();hideSplash()}
+loadFeeds=function(){if(!navigator.onLine||!API)return;var g=GN.length?GN:['Afrobeats'];
+function q(s,n,gen){return api('/search?q='+encodeURIComponent(s)+'&limit='+n).then(function(d){return(d.tracks||[]).map(function(x){return addT(x,gen).id})}).catch(function(){return[]})}
+var hot=q(REG+' hot songs 2026',10,g[0]).then(function(a){if(a.length){HOTQ=uniq(a);paint()}});
+var nw=Promise.all([q(g[0]+' '+REG+' new release 2026',12,g[0]),q(g[1%g.length]+' new songs 2026',12,g[1%g.length])]).then(function(r){var a=uniq(r[0].concat(r[1]));if(a.length){NEWQ=a;paint()}});
+var tr=Promise.all([q(REG+' trending songs 2026',12,g[0]),q(g[0]+' trending 2026',12,g[0])]).then(function(r){var a=uniq(r[0].concat(r[1]));if(a.length){TRQ=a;paint()}});
+var fj=g.slice(0,3).map(function(x){return q(x+' '+REG+' songs',10,x)}).concat(Object.keys(fol).filter(function(k){return fol[k]&&isNaN(k)}).slice(0,2).map(function(a){return q(a,8,'')}));
+var fy=Promise.all(fj).then(function(r){var a=uniq([].concat.apply([],r));if(a.length){FY=a;paint()}});
+Promise.all([hot,nw,tr,fy]).then(feedSave)};
+retryNet=function(){ge('netMsg').classList.remove('on');loadFeeds();loadMixes()};
+/* show a message only when the phone really has no connection; redraw Home as soon as songs exist */
+var _fh9=fitHome;fitHome=function(){var has=HOTQ.length||NEWQ.length||TRQ.length||FY.length;if(has&&!ge('newList').children.length&&!ge('hotBox').children.length&&!ge('fyList').children.length){homeFeeds();return}
+var m=ge('netMsg');if(!has&&!SPL&&user&&navigator.onLine){m.classList.remove('on');['hotH','hotDots'].forEach(function(i){ge(i).style.display='none'});return}_fh9()};
+setInterval(function(){if(user&&navigator.onLine&&!SPL&&!(HOTQ.length||NEWQ.length||TRQ.length))loadFeeds()},6000);
+fetch(API+'/health').catch(function(){});
+if(tokU&&feedLoad()){homeFeeds();setTimeout(hideSplash,900)}
+/* back button: always lands on Home first, then Minimise/Exit on the next press */
+document.addEventListener('pointerdown',function f(){document.removeEventListener('pointerdown',f);history.pushState({s:'trap'},'','#'+tab)},{once:true});
 </script>
 </body>
 </html>
