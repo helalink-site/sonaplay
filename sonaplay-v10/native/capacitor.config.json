@@ -1,0 +1,7 @@
+{
+  "appId": "com.skyline.sonaplay",
+  "appName": "Sona Play",
+  "webDir": "www",
+  "backgroundColor": "#0A0A0F",
+  "server": { "androidScheme": "https" }
+}
