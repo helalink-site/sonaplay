@@ -1044,6 +1044,14 @@ document.addEventListener('pointerdown',function f(){document.removeEventListene
 document.documentElement.dataset.theme='dark';
 (function(){var st=document.createElement('style');st.textContent='html,body{overflow-x:hidden;max-width:100%}.scr,.fl{overflow-x:hidden}#bPP,.mp{position:relative;overflow:visible!important}.rip{position:absolute;inset:0;border-radius:50%;pointer-events:none}.rip i{position:absolute;inset:0;border-radius:50%;border:2px solid rgba(255,255,255,.75);animation:rip 1.6s ease-out infinite}.rip i:nth-child(2){animation-delay:.8s}@keyframes rip{0%{transform:scale(.8);opacity:.9}100%{transform:scale(1.75);opacity:0}}.pb{display:grid;place-items:center;animation:breathe 1.2s ease-in-out infinite}.mp .pb svg{width:18px;height:18px}body.ld .mp::after,body.ld #bPP::after{display:none}';document.head.appendChild(st)})();
 RING='<span class="rip"><i></i><i></i></span><span class="pb">'+I('play',28)+'</span>';
+/* background play: decide the next song early and have its link ready, so the switch needs no waiting when the screen is off */
+var NXT=-1;
+function pickNext(){if(Q.length)return Q[0];if(SH){var c=T.filter(function(t){return t.vid&&t.id!==cur});return c.length?c[Math.floor(Math.random()*c.length)].id:-1}var n=T.length;if(n<3)return -1;var i=cur;do{i=(i+1)%n}while(i===0||!T[i].vid);return i}
+prefetchNext=function(){NXT=pickNext();if(NXT>0&&T[NXT]&&T[NXT].vid&&!blobs[T[NXT].vid])getStream(T[NXT].vid).catch(function(){})};
+var _stM=step;step=function(d){if(d===1&&SH&&!Q.length&&NXT>0&&T[NXT]&&T[NXT].vid&&NXT!==cur&&!(au.ended&&(RP===0||RP===2))){var n=NXT;NXT=-1;return play(n)}return _stM(d)};
+/* loader stops the moment the song is really playing, then the pause icon shows */
+function ldDone(){if(!LD)return;LD=false;render();var b=ge('bPP');if(b)b.innerHTML=I(playing?'pause':'play',30);try{renderMini();renderNav()}catch(e){}}
+['playing','canplay','timeupdate'].forEach(function(ev){au.addEventListener(ev,function(){if(LD&&!au.paused&&au.currentTime>0.05&&au.readyState>=2)ldDone();else if(LD&&ev==='playing')ldDone()})});
 </script>
 </body>
 </html>
