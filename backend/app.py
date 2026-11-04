@@ -1160,46 +1160,6 @@ def job_check_releases():
     return jsonify({"artists_checked": min(len(by), 40), "new_songs": new_songs, "broadcasts_pushed": pend})
 
 
-
-import threading as _th, queue as _q
-_warm_q = _q.Queue()
-_warming = set()
-def _warm_one(vid):
-    ex = find_cached_native(vid)
-    if ex and os.path.getsize(ex) > 1000:
-        return
-    resolved = resolve_live_url(vid, allow_long=False)
-    if not resolved:
-        return
-    url, ext = resolved
-    final = cache_path(vid, ext)
-    tmp = final + ".part"
-    r = requests.get(url, stream=True, timeout=30, headers={"User-Agent": "Mozilla/5.0"}, proxies=REQUESTS_PROXIES)
-    with open(tmp, "wb") as f:
-        for c in r.iter_content(chunk_size=64 * 1024):
-            if c:
-                f.write(c)
-    os.replace(tmp, final)
-def _warm_loop():
-    while True:
-        v = _warm_q.get()
-        try:
-            _warm_one(v)
-        except Exception as e:
-            print(f"warm failed {v}: {e}")
-        finally:
-            _warming.discard(v)
-_th.Thread(target=_warm_loop, daemon=True).start()
-@app.post("/api/warm")
-def warm_songs():
-    ids = (request.get_json(silent=True) or {}).get("ids", [])
-    n = 0
-    for v in ids[:6]:
-        if isinstance(v, str) and re.fullmatch(r"[\w-]{11}", v) and v not in _warming and _warm_q.qsize() < 16:
-            _warming.add(v)
-            _warm_q.put(v)
-            n += 1
-    return jsonify({"queued": n})
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=os.environ.get("FLASK_DEBUG") == "1", threaded=True)

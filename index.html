@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
+<script>/* Google sign-in returns in a Chrome tab: hand the result to the Sona Play app */
+(function(){try{var u=navigator.userAgent,h=location.hash,q=location.search;if(/Android/.test(u)&&!/; wv\)/.test(u)&&/access_token=|[?&]code=/.test(q+h)&&!sessionStorage.getItem('sp_hand')){sessionStorage.setItem('sp_hand','1');location.replace('intent://'+location.host+'/?sp='+encodeURIComponent(q+h)+'#Intent;scheme=https;package=com.sonaplay.app;S.browser_fallback_url='+encodeURIComponent(location.href)+';end')}}catch(e){}})();</script>
+
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sona Play</title>
@@ -701,7 +704,7 @@ var _ra=readAll;readAll=function(){_ra();if(sb&&user)sb.from('notifications').up
 /* auth */
 function authGo(){var e=ge('aE').value.trim(),p=ge('aP').value;if(!sb||!e||!p){toast('Enter email and password');return} var rg=ge('aR').value; if(authMode==='signup'){if(!rg){toast('Select your region');return} if(p.length<8){toast('Password needs at least 8 characters');return}} if(authMode==='signup')sb.auth.signUp({email:e,password:p,options:{data:{display_name:e.split('@')[0],region:rg}}}).then(function(r){if(r.error)return toast(r.error.message);if(r.data.session)afterLogin(r.data.user);else toast('Check your email to confirm')});
 else sb.auth.signInWithPassword({email:e,password:p}).then(function(r){if(r.error)return toast(r.error.message);afterLogin(r.data.user)})}
-function google(){if(sb)sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:SITE+location.pathname}})}
+function google(){if(sb)sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:location.origin+location.pathname}})}
 function afterLogin(u){user=u;hideAuth();hideHero();var m=u.user_metadata||{};NAME=m.display_name||m.name||(u.email||'').split('@')[0];EMAIL=u.email||'';
 Promise.all([sb.from('profiles').select('region,avatar_url,display_name').eq('id',u.id).maybeSingle(),sb.from('user_prefs').select('genres').eq('user_id',u.id).maybeSingle(),sb.from('follows').select('artist_name').eq('user_id',u.id)]).then(function(R){
 var reg=R[0].data&&R[0].data.region,gn=R[1].data&&R[1].data.genres;(R[2].data||[]).forEach(function(f){fol[f.artist_name]=1;savedFol[f.artist_name]=1});if(reg)REG=reg;if(gn&&gn.length)GN=gn;var pd=R[0].data||{};if(pd.avatar_url)AVATAR=pd.avatar_url;if(pd.display_name)NAME=pd.display_name;
@@ -793,7 +796,7 @@ if(!r.ok||!r.body)throw 0;var tot=+r.headers.get('content-length')||0,got=0,part
 return (function pump(){return rd.read().then(function(x){if(x.done)return new Blob(parts,{type:r.headers.get('content-type')||'audio/mp4'});parts.push(x.value);got+=x.value.length;var p=tot?Math.min(99,got/tot*100):Math.min(95,2+got/3.2e6*90);if(Math.abs(p-dl[id].p)>=1){dl[id].p=p;render()}return pump()})})()
 }).then(function(b){blobs[t.vid]=b;return idbPut({vid:t.vid,t:t.t,a:t.a,img:t.img,blob:b})}).then(function(){dl[id]={ph:'done',p:100};render()}).catch(function(){delete dl[id];render();toast('Download failed')})};
 /* share: our own link, no index.html */
-shareT=function(t){var u=SITE+'/?play='+encodeURIComponent(t.vid)+'&t='+encodeURIComponent(t.t||'');var tx=(t.t||'Song')+(t.a?' by '+t.a:'')+' \u2014 on Sona Play';
+shareT=function(t){var u=location.origin+'/?play='+encodeURIComponent(t.vid)+'&t='+encodeURIComponent(t.t||'');var tx=(t.t||'Song')+(t.a?' by '+t.a:'')+' \u2014 on Sona Play';
 if(navigator.share)navigator.share({title:t.t,text:tx,url:u}).catch(function(){});else if(navigator.clipboard){navigator.clipboard.writeText(tx+' '+u);toast('Link copied')}else toast(u)};
 (function(){var p=new URLSearchParams(location.search),r=p.get('ref'),v=p.get('play');
 if(r&&/^[A-Za-z0-9_-]{1,30}$/.test(r))try{localStorage.sona_ref=r}catch(e){}
@@ -801,7 +804,7 @@ if(v&&/^[A-Za-z0-9_-]{11}$/.test(v))window._deep={v:v,t:(p.get('t')||'').slice(0
 if(r||v)history.replaceState({s:'home'},'','/#home')})();
 function deepPlay(){var d=window._deep;if(!d)return;window._deep=null;var t=addT({videoId:d.v,title:d.t||'Shared song',artist:'',thumbnail:'https://i.ytimg.com/vi/'+d.v+'/hqdefault.jpg'});play(t.id)}
 /* invites */
-function inviteUrl(){return SITE+'/?ref='+encodeURIComponent(UNAME||slug(NAME))}
+function inviteUrl(){return location.origin+'/?ref='+encodeURIComponent(UNAME||slug(NAME))}
 function paintInv(){var e=ge('invL');if(e)e.textContent=inviteUrl()}
 function shareInvite(){var u=inviteUrl(),tx='Join me on Sona Play: official songs and DJ mixes.';if(navigator.share)navigator.share({title:'Sona Play',text:tx,url:u}).catch(function(){});else copyInvite()}
 function copyInvite(){var u=inviteUrl();if(navigator.clipboard)navigator.clipboard.writeText(u).then(function(){toast('Invite link copied')});else toast(u)}
@@ -885,7 +888,7 @@ au.addEventListener('playing',function(){clearTimeout(wT);recN=0});
 (function(){var s=ge('aR');if(s)s.innerHTML='<option value="">Select your region</option>'+REGS.map(function(x){return '<option>'+x+'</option>'}).join('')})();
 var __sa=setAuth;setAuth=function(m){__sa(m);ge('aRw').style.display=m==='signup'?'flex':'none';ge('aFp').style.display=m==='signup'?'none':'block';ge('aP').autocomplete=m==='signup'?'new-password':'current-password'};
 setAuth(authMode);
-function forgotPw(){var e=ge('aE').value.trim();if(!sb||!e){toast('Enter your email first');return}sb.auth.resetPasswordForEmail(e,{redirectTo:SITE+'/'}).then(function(r){toast(r.error?r.error.message:'Reset link sent. Check your email')})}
+function forgotPw(){var e=ge('aE').value.trim();if(!sb||!e){toast('Enter your email first');return}sb.auth.resetPasswordForEmail(e,{redirectTo:location.origin+'/'}).then(function(r){toast(r.error?r.error.message:'Reset link sent. Check your email')})}
 function saveRcv(){var p=ge('rcP').value;if(p.length<8){toast('Password needs at least 8 characters');return}sb.auth.updateUser({password:p}).then(function(r){if(r.error)return toast(r.error.message);ge('rcv').classList.remove('on');toast('Password updated');if(r.data&&r.data.user)afterLogin(r.data.user)})}
 if(sb)sb.auth.onAuthStateChange(function(ev){if(ev==='PASSWORD_RECOVERY'){hideAuth();hideHero();ge('rcv').classList.add('on')}});
 
@@ -956,7 +959,7 @@ function subRT(){if(!sb||!user||RT)return;try{RT=sb.channel('n-'+user.id).on('po
 /* downloads: real file saved to the phone (tagged with cover) and kept for offline play */
 function saveFile(b,t){var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=((t.a?t.a+' - ':'')+t.t).replace(/[\\\/:*?"<>|]/g,'').slice(0,90)+'.mp3';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove()},4000)}
 startDl=function(id){var t=T[id],d=dl[id];if(!t||!t.vid||(d&&d.ph))return;if(!online){toast('You are offline');return}dl[id]={ph:'prep',p:0};render();
-var url=API+'/download/'+t.vid+'?title='+encodeURIComponent(t.t)+'&artist='+encodeURIComponent(t.a)+'&thumb='+encodeURIComponent(SITE+'/icons/icon-512.png');
+var url=API+'/download/'+t.vid+'?title='+encodeURIComponent(t.t)+'&artist='+encodeURIComponent(t.a)+'&thumb='+encodeURIComponent(location.origin+'/icons/icon-512.png');
 fetch(url).then(function(r){if(!r.ok)throw 0;var L=+r.headers.get('Content-Length')||0,rd=r.body.getReader(),ch=[],got=0;dl[id]={ph:'save',p:3};return(function pump(){return rd.read().then(function(x){if(x.done)return new Blob(ch,{type:'audio/mpeg'});ch.push(x.value);got+=x.value.length;dl[id].p=L?Math.min(97,got/L*100):Math.min(92,got/40000);render();return pump()})})()}).then(function(b){blobs[t.vid]=b;return fetch(t.img).then(function(r){return r.blob()}).catch(function(){return null}).then(function(cv){return idbPut({vid:t.vid,t:t.t,a:t.a,img:t.img,blob:b,cover:cv})}).then(function(){saveFile(b,t)})}).then(function(){dl[id]={ph:'done',p:100};render();toast('Saved to your phone')}).catch(function(){delete dl[id];render();toast('Download failed')})};
 loadLib=function(){idb().then(function(db){var q=db.transaction('dl').objectStore('dl').getAll();q.onsuccess=function(){(q.result||[]).forEach(function(o){var t=addT({videoId:o.vid,title:o.t,artist:o.a,thumbnail:o.img});if(o.cover)t.img=URL.createObjectURL(o.cover);dl[t.id]={ph:'done',p:100};blobs[o.vid]=o.blob});render()}}).catch(function(){})};loadLib();
 
@@ -1052,52 +1055,6 @@ var _stM=step;step=function(d){if(d===1&&SH&&!Q.length&&NXT>0&&T[NXT]&&T[NXT].vi
 /* loader stops the moment the song is really playing, then the pause icon shows */
 function ldDone(){if(!LD)return;LD=false;render();var b=ge('bPP');if(b)b.innerHTML=I(playing?'pause':'play',30);try{renderMini();renderNav()}catch(e){}}
 ['playing','canplay','timeupdate'].forEach(function(ev){au.addEventListener(ev,function(){if(LD&&!au.paused&&au.currentTime>0.05&&au.readyState>=2)ldDone();else if(LD&&ev==='playing')ldDone()})});
-
-/* ===== v11: instant start, smart caching, native app support ===== */
-var SITE=(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform())?'https://sonaplaiy.netlify.app':location.origin;
-var NATIVE=SITE!==location.origin,errN=0;
-var CN='sona-audio';
-function pUrl(v){return new URL(API).origin+'/api/proxy/'+v}
-function cGet(v){return window.caches?caches.open(CN).then(function(c){return c.match(pUrl(v))}).then(function(r){return r?r.blob():null}).catch(function(){return null}):Promise.resolve(null)}
-function cPut(v,b){if(!window.caches)return;caches.open(CN).then(function(c){return c.put(pUrl(v),new Response(b,{headers:{'Content-Type':b.type||'audio/mp4'}})).then(function(){return c.keys()}).then(function(k){if(k.length>40)return c.delete(k[0])})}).catch(function(){})}
-var _mv=mixView;mixView=function(){MIX.forEach(function(m){if(T[m.tid])T[m.tid].mix=true});_mv()};
-/* tap a song: play from the phone's copy if there is one, otherwise open the server stream straight away (no extra round trip) */
-play=function(id){var t=T[id];if(!t||!t.vid)return;window._up=false;recN=0;
-if(tab==='search'&&ge('q').value.trim()){var r=RS().filter(function(x){return x!==ge('q').value.trim()});r.unshift(ge('q').value.trim());try{localStorage.sona_rs=JSON.stringify(r.slice(0,6))}catch(e){}}
-cur=id;playing=true;pos=0;cache=0;LD=true;render();go('play');au.pause();clearTimeout(ldT);ldT=setTimeout(ldOff,25000);
-if(blobs[t.vid]){startAu(URL.createObjectURL(blobs[t.vid]));return}
-cGet(t.vid).then(function(b){if(cur!==id)return;if(b){startAu(URL.createObjectURL(b));return}
-if(!navigator.onLine){ldOff();toast('You are offline');return}
-if(!t.mix){startAu(API+'/relay-and-cache/'+t.vid);return}
-getStream(t.vid).then(function(u){if(cur===id)startAu(u)}).catch(function(){ldOff();toast('Cannot play this song')})});
-setTimeout(prefetchNext,2500)};
-au.addEventListener('playing',function(){errN=0});
-au.addEventListener('error',function(){if(!playing||!au.src||/^blob:/.test(au.src)||++errN>3)return;toast('Cannot play this song');setTimeout(function(){step(1)},900)});
-/* while it plays the server keeps its own full copy; as soon as that is ready we keep one on the phone too (no second download from YouTube) */
-function cacheTrack(t){if(!t||t.mix||blobs[t.vid]||!navigator.onLine)return;var n=0,id=cur;(function poll(){if(cur!==id||++n>40)return;fetch(API+'/stream/'+t.vid).then(function(r){return r.json()}).then(function(d){if(d.url&&d.url.indexOf('/api/proxy/')>-1)return fetch(d.url).then(function(r){return r.blob()}).then(function(b){if(b.size>1000){cPut(t.vid,b);BG={vid:t.vid,blob:b};if(document.hidden)swapBlob()}});setTimeout(poll,4500)}).catch(function(){setTimeout(poll,6000)})})()}
-startAu=function(u){au._sw=null;au.src=u;au.play().catch(function(){});mediaSess();if(u.indexOf('blob:')!==0)cacheTrack(T[cur])};
-/* the server downloads the songs on Home before you tap them */
-var WM={},wT;
-function warm(ids){ids=ids.filter(function(v){return v&&!WM[v]&&/^[\w-]{11}$/.test(v)&&!blobs[v]});if(!ids.length||!navigator.onLine||!API)return;ids.forEach(function(v){WM[v]=1});for(var k=0;k<ids.length;k+=6)(function(c,d){setTimeout(function(){fetch(API+'/warm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:c})}).catch(function(){})},d)})(ids.slice(k,k+6),k*400)}
-function warmFeed(){clearTimeout(wT);wT=setTimeout(function(){var o=[];[HOTQ.slice(0,3),NEWQ.slice(0,4),TRQ.slice(0,4),FY.slice(0,3)].forEach(function(a){a.forEach(function(i){if(T[i]&&!T[i].mix)o.push(T[i].vid)})});warm(o)},1200)}
-paint=function(){HS.n.q=-1;HS.t.q=-1;homeFeeds();hideSplash();warmFeed()};
-prefetchNext=function(){var i=Q.length?Q[0]:-1;if(i<0){var n=T.length,k=cur;do{k=(k+1)%n}while(k===0||!T[k].vid);i=k}var o=[];if(T[i]&&T[i].vid)o.push(T[i].vid);warm(o)};
-if(HOTQ.length)warmFeed();
-
-/* the loader must survive every redraw of the player and mini player */
-function ldIcons(){if(!LD)return;var b=ge('bPP');if(b)b.innerHTML=RING;var m=document.querySelector('.mp');if(m)m.innerHTML=RING}
-var _rp11=renderPlayer;renderPlayer=function(){_rp11.apply(this,arguments);ldIcons()};
-var _rm11=renderMini;renderMini=function(){_rm11.apply(this,arguments);ldIcons()};
-function icoRestore(){var b=ge('bPP');if(b&&b.querySelector('.rip'))b.innerHTML=I(playing?'pause':'play',30);var m=document.querySelector('.mp');if(m&&m.querySelector('.rip'))m.innerHTML=I(playing?'pause':'play',18)}
-setInterval(function(){if(!LD)icoRestore()},300);
-/* native Android app (Capacitor) */
-if(NATIVE){var NP=window.Capacitor.Plugins||{};document.documentElement.classList.add('native');
-try{NP.BackgroundMode&&NP.BackgroundMode.enable&&NP.BackgroundMode.enable()}catch(e){}
-try{NP.App.addListener('backButton',function(){backPress()})}catch(e){}
-minimise=function(){ge('exit').classList.remove('on');mediaSess();try{NP.App.minimizeApp()}catch(e){}};
-exitApp=function(){au.pause();au.removeAttribute('src');playing=false;try{NP.BackgroundMode.disable()}catch(e){}try{NP.App.exitApp()}catch(e){history.go(-2)}};
-var _g0=google;google=function(){if(!sb||!NP.Browser)return _g0();sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:'com.skyline.sonaplay://auth',skipBrowserRedirect:true}}).then(function(r){if(r.data&&r.data.url)NP.Browser.open({url:r.data.url})})};
-try{NP.App.addListener('appUrlOpen',function(e){var u=e.url||'';if(u.indexOf('com.skyline.sonaplay://')!==0)return;try{NP.Browser.close()}catch(x){}var q=new URLSearchParams(u.split('#')[1]||u.split('?')[1]||''),a=q.get('access_token'),rf=q.get('refresh_token');if(a&&rf)sb.auth.setSession({access_token:a,refresh_token:rf}).then(function(r){if(r.data&&r.data.session)afterLogin(r.data.session.user)})})}catch(e){}}
 </script>
 </body>
 </html>
