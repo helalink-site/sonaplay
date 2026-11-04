@@ -107,7 +107,7 @@ _known_mix_ids = set()
 # (even by a different person) skips that wait entirely. Short TTL because
 # googlevideo URLs themselves expire after a while.
 _mix_url_cache = {}
-MIX_URL_CACHE_TTL = 60 * 15
+MIX_URL_CACHE_TTL = 60 * 4
 
 MIX_SEEDS = [
     "afrobeats hits", "bongo flava hits", "gengetone hits",
@@ -303,7 +303,7 @@ def find_cached_native(vid):
     faster than the mp3 path since there's no ffmpeg re-encode pass."""
     safe = re.sub(r"[^a-zA-Z0-9_-]", "", vid)
     for f in os.listdir(CACHE_DIR):
-        if f.startswith(safe + ".") and not f.endswith(".mp3") and not f.endswith(".part"):
+        if f.startswith(safe + ".") and not f.endswith(".mp3"):
             return os.path.join(CACHE_DIR, f)
     return None
 
@@ -581,33 +581,6 @@ def stream(vid):
 
     base = request.url_root.rstrip("/")
     return jsonify({"url": f"{base}/api/relay-and-cache/{vid}", "videoId": vid, "live": True})
-
-
-_warm_pool = None
-
-
-@app.post("/api/warm")
-def warm_tracks():
-    """Resolve playable links ahead of time for songs the listener is likely
-    to tap (top of Home, next in queue), so tapping starts playback at once.
-    Returns immediately; the resolving happens in the background."""
-    global _warm_pool
-    from concurrent.futures import ThreadPoolExecutor
-    if _warm_pool is None:
-        _warm_pool = ThreadPoolExecutor(max_workers=3)
-    ids = (request.get_json(silent=True) or {}).get("ids") or []
-    queued = 0
-    for vid in ids[:6]:
-        if not isinstance(vid, str) or not re.fullmatch(r"[\w-]{11}", vid):
-            continue
-        if vid in _known_mix_ids or find_cached_native(vid):
-            continue
-        c = _mix_url_cache.get(vid)
-        if c and c[1] > time.time():
-            continue
-        _warm_pool.submit(resolve_live_url, vid, False)
-        queued += 1
-    return jsonify({"queued": queued}), 202
 
 
 @app.get("/api/relay-and-cache/<vid>")
