@@ -1,15 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Sona Play</title>
 <link rel="manifest" href="manifest.json"><link rel="icon" href="icons/icon-192.png"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><meta name="theme-color" content="#6C63FF">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://sonaplay.onrender.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><script>try{fetch("https://sonaplay.onrender.com/api/health",{mode:"no-cors"}).catch(function(){})}catch(e){}</script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'"><noscript><link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
 <style>
 :root{--v:#6C63FF;--c:#FF6584;--bg:#0A0A0F;--s1:#12121A;--s2:#1A1A26;--t:#F0F0F8;--m:#9494AB;--ln:rgba(255,255,255,.09);--ok:#3DDC97;--b:rgba(108,99,255,.22);--g:linear-gradient(135deg,#6C63FF,#FF6584);box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media(prefers-color-scheme:light){:root:not([data-theme="dark"]){--bg:#F5F5FA;--s1:#fff;--s2:#ECECF5;--t:#0A0A0F;--m:#5E5E78;--ln:rgba(0,0,0,.09);--b:rgba(108,99,255,.18)}}
-:root[data-theme="light"]{--bg:#F5F5FA;--s1:#fff;--s2:#ECECF5;--t:#0A0A0F;--m:#5E5E78;--ln:rgba(0,0,0,.09);--b:rgba(108,99,255,.18)}
 *{box-sizing:border-box;margin:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
 body{background:var(--bg);color:var(--t);font:14px/1.4 Inter,system-ui,sans-serif}
@@ -228,7 +227,6 @@ body.ld #bPP::after{width:32px;height:32px;margin:-16px 0 0 -16px}
   <header class="top">
     <span class="av" id="avBtn" style="pointer-events:none;background:none;border:0"></span>
     <h1 id="ttl">Sona Play</h1>
-    <button class="ib" id="thBtn" aria-label="Theme" onclick="toggleTheme()"></button>
     <button class="ib" id="sBtn" aria-label="Search" onclick="go('search')"></button>
     <button class="ib bell" id="bellBtn" aria-label="Notifications" onclick="go('notif')"></button>
   </header>
@@ -541,8 +539,6 @@ function openLegal(k){go('legal');document.getElementById('ttl').textContent=k;d
 var tt;function toast(m){var e=document.getElementById('toast');e.textContent=m;e.style.opacity=1;clearTimeout(tt);tt=setTimeout(function(){e.style.opacity=0},2200)}
 
 P.moon='<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>';P.sun='<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>';
-function thIcon(){var d=document.documentElement,l=(d.dataset.theme||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'))==='light';document.getElementById('thBtn').innerHTML=I(l?'moon':'sun',22)}
-function toggleTheme(){var d=document.documentElement,l=(d.dataset.theme||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'))==='light';d.dataset.theme=l?'dark':'light';thIcon()}
 function hideHero(){document.getElementById('hero').classList.remove('on')}
 
 /* ===== v4: live feeds, preferences, profile ===== */
@@ -623,7 +619,7 @@ document.getElementById('flB').innerHTML=flL.length?flL.map(function(n,i){return
 function unFol(i){fol[flL[i]]=0;drawFol();render()}
 document.getElementById('edX').innerHTML=I('x',18);document.getElementById('gnX').innerHTML=I('x',18);document.getElementById('gnSi').innerHTML=I('search',20);document.getElementById('obSi').innerHTML=I('search',20);document.getElementById('obBack').innerHTML=I('prev',18);document.getElementById('pfX').innerHTML=I('x',18);
 
-setAuth('login');thIcon();eqInit();bell();document.getElementById('sBtn').innerHTML=I('search',22);document.getElementById('bPP').innerHTML=I('pause',30);
+setAuth('login');eqInit();bell();document.getElementById('sBtn').innerHTML=I('search',22);document.getElementById('bPP').innerHTML=I('pause',30);
 document.getElementById('bPrev').innerHTML=I('prev',22);document.getElementById('bNext').innerHTML=I('next',22);
 document.getElementById('bLike').innerHTML=I('heart',22);document.getElementById('bEq').innerHTML=I('eq',22);document.getElementById('bSh').innerHTML=I('share',22);document.getElementById('bDots').innerHTML=I('dots',22);document.getElementById('bShuf').innerHTML=I('shuf',20);document.getElementById('bRep').innerHTML=I('rep',20);document.querySelectorAll('.skr button').forEach(function(b,i){b.insertAdjacentHTML('afterbegin',I(['prev','undo','redo','next'][i],18))});
 /* ===== LIVE DATA LAYER ===== */
@@ -901,8 +897,8 @@ var tokU=stored();if(tokU)ge('hero').classList.remove('on');
 var _fh7=fitHome;fitHome=function(){if(SPL||!user){ge('netMsg').classList.remove('on');return}_fh7()};
 var _al7=afterLogin;afterLogin=function(u){if(AL&&user&&user.id===u.id)return;AL=true;_al7(u);subRT()};
 var _so7=signOut;signOut=function(){AL=false;if(RT&&sb){try{sb.removeChannel(RT)}catch(e){}RT=null}_so7()};
-function waitFeeds(cb){var n=0,iv=setInterval(function(){if(HOTQ.length||NEWQ.length||TRQ.length||++n>40){clearInterval(iv);cb()}},500)}
-(function(){if(!sb){ge('hero').classList.add('on');hideSplash();return}var t=setTimeout(function(){if(tokU&&!user)afterLogin(tokU);hideSplash()},7000);
+function waitFeeds(cb){var n=0,iv=setInterval(function(){if(HOTQ.length||NEWQ.length||TRQ.length||++n>8){clearInterval(iv);cb()}},350)}
+(function(){if(!sb){ge('hero').classList.add('on');hideSplash();return}var t=setTimeout(function(){if(tokU&&!user)afterLogin(tokU);hideSplash()},3500);
 sb.auth.getSession().then(function(r){clearTimeout(t);var s=r.data&&r.data.session;if(s){if(!user)afterLogin(s.user);waitFeeds(hideSplash)}else if(tokU&&!navigator.onLine){afterLogin(tokU);hideSplash()}else{ge('hero').classList.add('on');hideSplash()}},function(){clearTimeout(t);if(tokU){if(!user)afterLogin(tokU)}else ge('hero').classList.add('on');hideSplash()})})();
 /* song loading ring + faster start */
 var RING='<svg class="ldr" viewBox="0 0 44 44"><defs><linearGradient id="rgq" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity=".15"/></linearGradient></defs><circle cx="22" cy="22" r="17" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="4"/><circle cx="22" cy="22" r="17" fill="none" stroke="url(#rgq)" stroke-width="4" stroke-linecap="round" stroke-dasharray="42 70"/></svg>';
@@ -1040,9 +1036,23 @@ var _fh9=fitHome;fitHome=function(){var has=HOTQ.length||NEWQ.length||TRQ.length
 var m=ge('netMsg');if(!has&&!SPL&&user&&navigator.onLine){m.classList.remove('on');['hotH','hotDots'].forEach(function(i){ge(i).style.display='none'});return}_fh9()};
 setInterval(function(){if(user&&navigator.onLine&&!SPL&&!(HOTQ.length||NEWQ.length||TRQ.length))loadFeeds()},6000);
 fetch(API+'/health').catch(function(){});
-if(tokU&&feedLoad()){homeFeeds();setTimeout(hideSplash,900)}
+if(tokU&&feedLoad()){homeFeeds();setTimeout(hideSplash,450)}
 /* back button: always lands on Home first, then Minimise/Exit on the next press */
 document.addEventListener('pointerdown',function f(){document.removeEventListener('pointerdown',f);history.pushState({s:'trap'},'','#'+tab)},{once:true});
+
+/* ===== v10: permanent dark, no sideways overlap, instant play, warm songs on the server ===== */
+document.documentElement.dataset.theme='dark';
+(function(){var st=document.createElement('style');st.textContent='html,body{overflow-x:hidden;max-width:100%}.scr,.fl{overflow-x:hidden}#bPP,.mp{position:relative;overflow:hidden!important}.rip{position:absolute;inset:0;border-radius:50%;pointer-events:none;overflow:hidden}.rip i{position:absolute;inset:0;border-radius:50%;border:2px solid rgba(255,255,255,.75);animation:rip 1.4s ease-out infinite}.rip i:nth-child(2){animation-delay:.7s}@keyframes rip{0%{transform:scale(.45);opacity:.9}100%{transform:scale(1);opacity:0}}.pb{display:grid;place-items:center;animation:breathe 1.2s ease-in-out infinite}.mp .pb svg{width:18px;height:18px}body.ld .mp::after,body.ld #bPP::after{display:none}';document.head.appendChild(st)})();
+RING='<span class="rip"><i></i><i></i></span><span class="pb">'+I('play',28)+'</span>';
+var WM={},wT;
+function warm(ids){ids=ids.filter(function(v){return v&&!WM[v]&&/^[\w-]{11}$/.test(v)&&!blobs[v]});if(!ids.length||!navigator.onLine||!API)return;ids.forEach(function(v){WM[v]=1});fetch(API+'/warm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:ids.slice(0,6)})}).catch(function(){})}
+function warmFeed(){clearTimeout(wT);wT=setTimeout(function(){var o=[];[HOTQ.slice(0,2),NEWQ.slice(0,2),TRQ.slice(0,2),FY.slice(0,1)].forEach(function(a){a.forEach(function(i){if(T[i])o.push(T[i].vid)})});warm(o)},1200)}
+var _p10=paint;paint=function(){_p10();warmFeed()};
+prefetchNext=function(){var i=Q.length?Q[0]:-1;if(i<0){var n=T.length,k=cur;do{k=(k+1)%n}while(k===0||!T[k].vid);i=k}if(T[i]&&T[i].vid)warm([T[i].vid])};
+/* start playing at once: no second download of the same song while it is still streaming */
+startAu=function(u){au._sw=null;au.src=u;au.play().catch(function(){});mediaSess();var t=T[cur],id=cur;
+if(u.indexOf('/relay-and-cache/')>-1){setTimeout(function(){if(cur===id&&t&&!blobs[t.vid])cacheTrack(t,u.replace('/relay-and-cache/','/proxy/'))},35000)}else cacheTrack(t,u)};
+if(HOTQ.length)warmFeed();
 </script>
 </body>
 </html>
