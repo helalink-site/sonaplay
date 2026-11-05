@@ -1102,6 +1102,44 @@ sb.auth.verifyOtp({email:em,token:c,type:'recovery'}).then(function(r){if(r.erro
 else sb.auth.verifyOtp({email:em,token:c,type:'signup'}).then(function(r){if(r.error)return toast(r.error.message);d.remove();afterLogin(r.data.user)})}}
 forgotPw=function(){var e=ge('aE').value.trim();if(!sb||!e){toast('Enter your email first');return}sb.auth.resetPasswordForEmail(e).then(function(r){if(r.error)return toast(r.error.message);showOtp(e,'recovery')})};
 if(sb){var __sip=sb.auth.signInWithPassword.bind(sb.auth);sb.auth.signInWithPassword=function(a){return __sip(a).then(function(r){if(r.error&&/not confirmed/i.test(r.error.message)){sb.auth.resend({type:'signup',email:a.email});showOtp(a.email,'signup');r.error.message='Enter the code we just emailed you'}return r})}}
+
+/* ===== v11: instant start, smart caching, native app support ===== */
+var errN=0;
+var CN='sona-audio';
+function pUrl(v){return new URL(API).origin+'/api/proxy/'+v}
+function cGet(v){return window.caches?caches.open(CN).then(function(c){return c.match(pUrl(v))}).then(function(r){return r?r.blob():null}).catch(function(){return null}):Promise.resolve(null)}
+function cPut(v,b){if(!window.caches)return;caches.open(CN).then(function(c){return c.put(pUrl(v),new Response(b,{headers:{'Content-Type':b.type||'audio/mp4'}})).then(function(){return c.keys()}).then(function(k){if(k.length>40)return c.delete(k[0])})}).catch(function(){})}
+var _mv=mixView;mixView=function(){MIX.forEach(function(m){if(T[m.tid])T[m.tid].mix=true});_mv()};
+/* tap a song: play from the phone's copy if there is one, otherwise open the server stream straight away (no extra round trip) */
+play=function(id){var t=T[id];if(!t||!t.vid)return;window._up=false;recN=0;
+if(tab==='search'&&ge('q').value.trim()){var r=RS().filter(function(x){return x!==ge('q').value.trim()});r.unshift(ge('q').value.trim());try{localStorage.sona_rs=JSON.stringify(r.slice(0,6))}catch(e){}}
+cur=id;playing=true;pos=0;cache=0;LD=true;render();go('play');au.pause();clearTimeout(ldT);ldT=setTimeout(ldOff,25000);
+if(blobs[t.vid]){startAu(URL.createObjectURL(blobs[t.vid]));return}
+cGet(t.vid).then(function(b){if(cur!==id)return;if(b){startAu(URL.createObjectURL(b));return}
+if(!navigator.onLine){ldOff();toast('You are offline');return}
+if(!t.mix){startAu(API+'/relay-and-cache/'+t.vid);return}
+getStream(t.vid).then(function(u){if(cur===id)startAu(u)}).catch(function(){ldOff();toast('Cannot play this song')})});
+setTimeout(prefetchNext,2500)};
+au.addEventListener('playing',function(){errN=0});
+au.addEventListener('error',function(){if(!playing||!au.src||/^blob:/.test(au.src)||++errN>3)return;toast('Cannot play this song');setTimeout(function(){step(1)},900)});
+/* while it plays the server keeps its own full copy; as soon as that is ready we keep one on the phone too (no second download from YouTube) */
+function cacheTrack(t){if(!t||t.mix||blobs[t.vid]||!navigator.onLine)return;var n=0,id=cur;(function poll(){if(cur!==id||++n>40)return;fetch(API+'/stream/'+t.vid).then(function(r){return r.json()}).then(function(d){if(d.url&&d.url.indexOf('/api/proxy/')>-1)return fetch(d.url).then(function(r){return r.blob()}).then(function(b){if(b.size>1000){cPut(t.vid,b);BG={vid:t.vid,blob:b};if(document.hidden)swapBlob()}});setTimeout(poll,4500)}).catch(function(){setTimeout(poll,6000)})})()}
+startAu=function(u){au._sw=null;au.src=u;au.play().catch(function(){});mediaSess();if(u.indexOf('blob:')!==0)cacheTrack(T[cur])};
+/* the server downloads the songs on Home before you tap them */
+var WM={},wT;
+function warm(ids){ids=ids.filter(function(v){return v&&!WM[v]&&/^[\w-]{11}$/.test(v)&&!blobs[v]});if(!ids.length||!navigator.onLine||!API)return;ids.forEach(function(v){WM[v]=1});for(var k=0;k<ids.length;k+=6)(function(c,d){setTimeout(function(){fetch(API+'/warm',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids:c})}).catch(function(){})},d)})(ids.slice(k,k+6),k*400)}
+function warmFeed(){clearTimeout(wT);wT=setTimeout(function(){var o=[];[HOTQ.slice(0,3),NEWQ.slice(0,4),TRQ.slice(0,4),FY.slice(0,3)].forEach(function(a){a.forEach(function(i){if(T[i]&&!T[i].mix)o.push(T[i].vid)})});warm(o)},1200)}
+paint=function(){HS.n.q=-1;HS.t.q=-1;homeFeeds();hideSplash();warmFeed()};
+prefetchNext=function(){var i=Q.length?Q[0]:-1;if(i<0){var n=T.length,k=cur;do{k=(k+1)%n}while(k===0||!T[k].vid);i=k}var o=[];if(T[i]&&T[i].vid)o.push(T[i].vid);warm(o)};
+if(HOTQ.length)warmFeed();
+/* the play-button loader must survive every redraw and go away once sound starts */
+function ldIcons(){if(!LD)return;var b=ge('bPP');if(b)b.innerHTML=RING;var m=document.querySelector('.mp');if(m)m.innerHTML=RING}
+var _rp11=renderPlayer;renderPlayer=function(){_rp11.apply(this,arguments);ldIcons()};
+var _rm11=renderMini;renderMini=function(){_rm11.apply(this,arguments);ldIcons()};
+function icoRestore(){var b=ge('bPP');if(b&&b.querySelector('.rip'))b.innerHTML=I(playing?'pause':'play',30);var m=document.querySelector('.mp');if(m&&m.querySelector('.rip'))m.innerHTML=I(playing?'pause':'play',18)}
+setInterval(function(){if(!LD)icoRestore()},300);
+/* inside the Android app: Minimise and Exit are real */
+if(window.SonaNative&&SonaNative.minimise){minimise=function(){ge('exit').classList.remove('on');mediaSess();SonaNative.minimise()};exitApp=function(){au.pause();au.removeAttribute('src');playing=false;SonaNative.exitApp()}}
 </script>
 </body>
 </html>
