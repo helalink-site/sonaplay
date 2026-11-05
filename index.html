@@ -1167,6 +1167,12 @@ if(!list.length){toast('No audio files found');return}if(addBusy){toast('Still a
 var f=list[i++],vid='loc'+Date.now().toString(36)+i,name=f.name.replace(/\.[^.]+$/,'').replace(/[<>]/g,'').slice(0,80);
 if(f.size>200e6){bad++;return next()}
 f.arrayBuffer().then(function(buf){var blob=new Blob([buf],{type:f.type||'audio/mpeg'});return idbPut({vid:vid,t:name,a:'This device',img:'',blob:blob,cover:null}).then(function(){var t=addT({videoId:vid,title:name,artist:'This device'});blobs[vid]=blob;dl[t.id]={ph:'done',p:100};ok++;if(ok%4===0)render()})}).catch(function(){bad++}).then(next)})()};
+
+/* ===== v13: "new version" prompt inside the Android app ===== */
+function showUpd(url,tag){if(localStorage.sona_updseen===tag)return;sure('A new version of Sona Play is ready','Update',function(){try{localStorage.sona_updseen=tag}catch(e){}location.href=url})}
+function checkUpdate(){if(!window.SonaNative||!SonaNative.versionCode||!navigator.onLine)return;var cur=SonaNative.versionCode();
+fetch('https://api.github.com/repos/helalink-site/sonaplay-native/releases/latest').then(function(r){return r.json()}).then(function(d){var n=parseInt(String(d.tag_name||'').replace('app-',''),10);if(!n||n+100<=cur)return;var a=(d.assets||[]).filter(function(x){return/\.apk$/.test(x.name)})[0];if(a)showUpd(a.browser_download_url,d.tag_name)}).catch(function(){})}
+setTimeout(checkUpdate,8000);
 </script>
 </body>
 </html>
