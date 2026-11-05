@@ -256,7 +256,7 @@ def yt_entry_to_track(e, allow_mixes=False):
     }
 
 
-def yt_search(query, limit=20, order="relevance", allow_mixes=False):
+def _yt_search_raw(query, limit=20, order="relevance", allow_mixes=False):
     """Plain YouTube search only - "ytsearchdate:" turned out to also be
     unsupported in this yt-dlp version (same category of bug as the earlier
     ytmsearch one), which is exactly why New Releases kept coming back
@@ -292,6 +292,46 @@ def yt_search(query, limit=20, order="relevance", allow_mixes=False):
 # ---------------------------------------------------------------------------
 # Cache: download-once, serve-many
 # ---------------------------------------------------------------------------
+
+
+# ---- search results are cached so repeated opens are instant ----
+import time as _t, threading as _thr
+_SC = {}
+_SC_LOCK = _thr.Lock()
+_SC_INFLIGHT = {}
+def _nonempty(v):
+    if isinstance(v, dict):
+        return any(v.values())
+    return bool(v)
+def _cached(key, fn, ttl=1500):
+    now = _t.time()
+    with _SC_LOCK:
+        hit = _SC.get(key)
+        if hit and now - hit[0] < ttl:
+            return hit[1]
+        ev = _SC_INFLIGHT.get(key)
+        owner = ev is None
+        if owner:
+            ev = _thr.Event()
+            _SC_INFLIGHT[key] = ev
+    if not owner:
+        ev.wait(90)
+        hit = _SC.get(key)
+        return hit[1] if hit else fn()
+    try:
+        val = fn()
+        if _nonempty(val):
+            with _SC_LOCK:
+                _SC[key] = (_t.time(), val)
+            return val
+        return hit[1] if hit else val
+    finally:
+        with _SC_LOCK:
+            _SC_INFLIGHT.pop(key, None)
+        ev.set()
+def yt_search(query, limit=20, order="relevance", allow_mixes=False):
+    key = ("s", (query or "").strip().lower(), limit, order, bool(allow_mixes))
+    return _cached(key, lambda: _yt_search_raw(query, limit, order, allow_mixes))
 
 def cache_path(vid, ext="m4a"):
     safe = re.sub(r"[^a-zA-Z0-9_-]", "", vid)
@@ -1199,6 +1239,54 @@ def warm_songs():
             _warm_q.put(v)
             n += 1
     return jsonify({"queued": n})
+
+import datetime as _dt
+from concurrent.futures import ThreadPoolExecutor as _TPE
+_FEED_KEYS = {}
+def _feed_build(region, genres, follow):
+    yr = _dt.datetime.utcnow().year
+    g = genres or ["Afrobeats"]
+    jobs = {
+        "hot": [(f"{region} hot songs {yr}", 10)],
+        "new": [(f"{g[0]} {region} new release {yr}", 12), (f"{g[1 % len(g)]} new songs {yr}", 12)],
+        "trending": [(f"{region} trending songs {yr}", 12), (f"{g[0]} trending {yr}", 12)],
+        "foryou": [(f"{x} {region} songs", 10) for x in g[:3]] + [(f, 8) for f in follow[:2]],
+    }
+    flat = [(k, q, n) for k, lst in jobs.items() for q, n in lst]
+    with _TPE(max_workers=4) as ex:
+        res = list(ex.map(lambda x: (x[0], yt_search(x[1], limit=x[2])), flat))
+    out = {k: [] for k in jobs}
+    seen = {k: set() for k in jobs}
+    for k, tracks in res:
+        for t in tracks:
+            vid = t.get("videoId")
+            if vid and vid not in seen[k]:
+                seen[k].add(vid)
+                out[k].append(t)
+    return out
+@app.get("/api/feed")
+def feed():
+    region = (request.args.get("region") or "Kenya")[:40]
+    genres = [x.strip()[:30] for x in (request.args.get("genres") or "").split(",") if x.strip()][:3]
+    follow = [x.strip()[:60] for x in (request.args.get("follow") or "").split(",") if x.strip()][:2]
+    key = ("feed", region.lower(), tuple(genres), tuple(follow))
+    _FEED_KEYS[key] = _t.time()
+    return jsonify(_cached(key, lambda: _feed_build(region, genres, follow), ttl=900))
+def _feed_refresher():
+    while True:
+        _t.sleep(840)
+        for key in list(_FEED_KEYS.keys())[:20]:
+            if _t.time() - _FEED_KEYS.get(key, 0) > 6 * 3600:
+                _FEED_KEYS.pop(key, None)
+                continue
+            try:
+                _, region, genres, follow = key
+                with _SC_LOCK:
+                    _SC.pop(key, None)
+                _cached(key, lambda r=region, g=list(genres), f=list(follow): _feed_build(r, g, f), ttl=900)
+            except Exception as e:
+                print(f"feed refresh failed: {e}")
+_thr.Thread(target=_feed_refresher, daemon=True).start()
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=os.environ.get("FLASK_DEBUG") == "1", threaded=True)

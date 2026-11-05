@@ -1140,6 +1140,33 @@ function icoRestore(){var b=ge('bPP');if(b&&b.querySelector('.rip'))b.innerHTML=
 setInterval(function(){if(!LD)icoRestore()},300);
 /* inside the Android app: Minimise and Exit are real */
 if(window.SonaNative&&SonaNative.minimise){minimise=function(){ge('exit').classList.remove('on');mediaSess();SonaNative.minimise()};exitApp=function(){au.pause();au.removeAttribute('src');playing=false;SonaNative.exitApp()}}
+
+/* ===== v12: one-call feed, calm start, offline lock, reliable multi-add ===== */
+var T0=Date.now(),addBusy=false;
+/* Home songs come from one cached server call */
+var loadFeedsOld=loadFeeds;
+loadFeeds=function(){if(!navigator.onLine||!API)return;var g=GN.length?GN:['Afrobeats'],fl=Object.keys(fol).filter(function(k){return fol[k]&&isNaN(k)}).slice(0,2);
+api('/feed?region='+encodeURIComponent(REG)+'&genres='+encodeURIComponent(g.slice(0,3).join(','))+'&follow='+encodeURIComponent(fl.join(','))).then(function(d){
+function ids(a,gen){return(a||[]).map(function(x){return addT(x,gen).id})}
+var h=ids(d.hot,g[0]),n=ids(d.new,g[0]),t=ids(d.trending,g[0]),f=ids(d.foryou,'');
+if(!(h.length||n.length||t.length||f.length))throw 0;
+HOTQ=uniq(h);NEWQ=uniq(n);TRQ=uniq(t);FY=uniq(f);paint();feedSave()}).catch(function(){loadFeedsOld()})};
+/* the logo stays until songs are ready (max 20 s), so Home never shows empty section titles */
+var _hs12=hideSplash;
+hideSplash=function(force){if(!SPL)return;var has=HOTQ.length||NEWQ.length||TRQ.length||FY.length;if(!force&&user&&navigator.onLine&&!has&&Date.now()-T0<20000)return;_hs12()};
+setTimeout(function(){hideSplash(true)},20500);
+/* offline: only the library is open */
+var _go12=go;
+go=function(s,pop){if(!navigator.onLine&&['home','mixes','search','expand','artist'].indexOf(s)>-1){if(tab!=='dl')_go12('dl',pop);toast('You are offline');return}return _go12(s,pop)};
+backPress=function(){var o=document.querySelector('#exit.on,#nd.on,#pnm.on,#cf.on,#rcv.on');if(o){o.classList.remove('on');return}var hm=navigator.onLine?'home':'dl';if(tab!==hm){go(hm,true);return}if(Date.now()-lastBack<2500){ge('exit').classList.add('on')}else{lastBack=Date.now();toast('Press back again to exit')}};
+addEventListener('offline',function(){if(['home','mixes','search','expand','artist'].indexOf(tab)>-1){_go12('dl',true);toast('You are offline')}});
+/* add many songs from the phone: one at a time, a bad file cannot block the rest */
+addDeviceSongs=function(files){var list=[].slice.call(files).filter(function(f){return/^audio\//.test(f.type)||/\.(mp3|m4a|wav|ogg|flac|aac|opus|wma|amr)$/i.test(f.name)});
+if(!list.length){toast('No audio files found');return}if(addBusy){toast('Still adding songs');return}addBusy=true;var ok=0,bad=0,i=0;toast('Adding '+list.length+(list.length>1?' songs':' song'));
+(function next(){if(i>=list.length){addBusy=false;render();toast(ok+(ok===1?' song added':' songs added')+(bad?', '+bad+' failed':''));return}
+var f=list[i++],vid='loc'+Date.now().toString(36)+i,name=f.name.replace(/\.[^.]+$/,'').replace(/[<>]/g,'').slice(0,80);
+if(f.size>200e6){bad++;return next()}
+f.arrayBuffer().then(function(buf){var blob=new Blob([buf],{type:f.type||'audio/mpeg'});return idbPut({vid:vid,t:name,a:'This device',img:'',blob:blob,cover:null}).then(function(){var t=addT({videoId:vid,title:name,artist:'This device'});blobs[vid]=blob;dl[t.id]={ph:'done',p:100};ok++;if(ok%4===0)render()})}).catch(function(){bad++}).then(next)})()};
 </script>
 </body>
 </html>
