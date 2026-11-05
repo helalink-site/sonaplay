@@ -1069,7 +1069,7 @@ if(n.length<2){toast('Enter your full name');return}
 if(!/^[a-z0-9_]{3,20}$/.test(u)){toast('Username: 3-20 letters, numbers or _');return}
 if(!rg){toast('Select your region');return}
 if(p.length<8){toast('Password needs at least 8 characters');return}
-function go2(){sb.auth.signUp({email:e,password:p,options:{data:{display_name:n,username:u,region:rg}}}).then(function(r){if(r.error)return toast(r.error.message);if(r.data.session)afterLogin(r.data.user);else toast('Check your email to confirm')})}
+function go2(){sb.auth.signUp({email:e,password:p,options:{data:{display_name:n,username:u,region:rg}}}).then(function(r){if(r.error)return toast(r.error.message);if(r.data.session)afterLogin(r.data.user);else showOtp(e,'signup')})}
 sb.from('profiles').select('id').eq('username',u).limit(1).then(function(c){if(c&&c.data&&c.data.length){toast('That username is taken');return}go2()},go2)};
 function profSetup(tries){tries=tries||0;if(!user||ge('psu'))return;if(ge('onb').classList.contains('on')&&tries<20){setTimeout(function(){profSetup(tries+1)},1500);return}
 var d=document.createElement('div');d.id='psu';d.style.cssText='position:fixed;inset:0;z-index:70;background:var(--bg);display:flex;flex-direction:column;justify-content:center;gap:12px;padding:28px';
@@ -1089,6 +1089,19 @@ if(sb)sb.from('app_config').select('invite_base,share_url').limit(1).maybeSingle
 inviteUrl=function(){return INV?INV+encodeURIComponent(UNAME||slug(NAME)):location.origin+'/?ref='+encodeURIComponent(UNAME||slug(NAME))};
 var __sh=shareT;shareT=function(t){if(!SHU)return __sh(t);var tx=(t.t||'Song')+(t.a?' by '+t.a:'')+' \u2014 on Sona Play. Get the app:';
 if(navigator.share)navigator.share({title:t.t,text:tx,url:SHU}).catch(function(){});else if(navigator.clipboard){navigator.clipboard.writeText(tx+' '+SHU);toast('Link copied')}else toast(SHU)};
+/* email codes (OTP) instead of links: confirm signup and reset password */
+function showOtp(em,mode){var o=ge('otpBox');if(o)o.remove();var d=document.createElement('div');d.id='otpBox';
+d.style.cssText='position:fixed;inset:0;z-index:80;background:var(--bg);display:flex;flex-direction:column;justify-content:center;gap:12px;padding:28px';
+d.innerHTML='<h3 style="font:800 22px Syne;text-align:center">Enter your code</h3><p id="oE" style="text-align:center;opacity:.7;margin:0"></p><label class="sbox"><input id="oC" inputmode="numeric" autocomplete="one-time-code" placeholder="Code from your email" maxlength="10"></label>'+(mode==='recovery'?'<label class="sbox"><input id="oP" type="password" placeholder="New password (min 8)" autocomplete="new-password"></label>':'')+'<button class="big" id="oG">Verify</button><div style="text-align:center"><b id="oR" style="color:var(--v);cursor:pointer">Resend code</b> &nbsp;\u00b7&nbsp; <b id="oX" style="color:var(--v);cursor:pointer">Cancel</b></div>';
+document.body.appendChild(d);ge('oE').textContent='We sent a code to '+em;
+ge('oX').onclick=function(){d.remove()};
+ge('oR').onclick=function(){(mode==='recovery'?sb.auth.resetPasswordForEmail(em):sb.auth.resend({type:'signup',email:em})).then(function(r){toast(r.error?r.error.message:'Code sent again')})};
+ge('oG').onclick=function(){var c=ge('oC').value.trim();if(c.length<6){toast('Enter the code from your email');return}
+if(mode==='recovery'){var np=ge('oP').value;if(np.length<8){toast('Password needs at least 8 characters');return}
+sb.auth.verifyOtp({email:em,token:c,type:'recovery'}).then(function(r){if(r.error)return toast(r.error.message);sb.auth.updateUser({password:np}).then(function(u){if(u.error)return toast(u.error.message);d.remove();toast('Password updated');afterLogin(r.data.user)})})}
+else sb.auth.verifyOtp({email:em,token:c,type:'signup'}).then(function(r){if(r.error)return toast(r.error.message);d.remove();afterLogin(r.data.user)})}}
+forgotPw=function(){var e=ge('aE').value.trim();if(!sb||!e){toast('Enter your email first');return}sb.auth.resetPasswordForEmail(e).then(function(r){if(r.error)return toast(r.error.message);showOtp(e,'recovery')})};
+if(sb){var __sip=sb.auth.signInWithPassword.bind(sb.auth);sb.auth.signInWithPassword=function(a){return __sip(a).then(function(r){if(r.error&&/not confirmed/i.test(r.error.message)){sb.auth.resend({type:'signup',email:a.email});showOtp(a.email,'signup');r.error.message='Enter the code we just emailed you'}return r})}}
 </script>
 </body>
 </html>
