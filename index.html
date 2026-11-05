@@ -1007,7 +1007,7 @@ var ql=lc(v),cnt={};l.forEach(function(t){artistsOf(t).forEach(function(a){cnt[a
 if(!main){ac.innerHTML='';sl.innerHTML=l.map(row).join('');return}
 var oth=artistsOf(l[0]).filter(function(a){return a!==main&&!fol[a]});
 ac.innerHTML='<div class="acard">'+art({h:0})+'<div class="mi"><b>'+main+'</b></div><button class="chip'+(fol[main]?' on':'')+'" onclick="togFol(\''+main+'\')">'+(fol[main]?'Following':'Follow')+'</button><button class="chip" onclick="openArtist(\''+main+'\')">Go to artist</button></div>'+(oth.length?'<div class="chips" style="margin:8px 0">'+oth.map(function(a){return '<button class="chip" onclick="togFol(\''+a+'\')">Follow '+a+'</button>'}).join('')+'</div>':'');
-sl.innerHTML=l.map(row).join('')}).catch(function(){sl.innerHTML='<div class="sub">No results</div>'})},450)};
+warm(l.slice(0,3).filter(function(t){return !t.mix}).map(function(t){return t.vid}));sl.innerHTML=l.map(row).join('')}).catch(function(){sl.innerHTML='<div class="sub">No results</div>'})},450)};
 function arPaint(n){var l=T.filter(function(t){return t.vid&&artistsOf(t).some(function(a){return lc(a)===lc(n)})});ge('arHead').innerHTML='<div style="border-radius:50%;overflow:hidden;flex:none;width:52px;height:52px">'+art({h:0})+'</div><div class="mi"><b>'+n+'</b></div><button class="chip'+(fol[n]?' on':'')+'" onclick="togFol(\''+n+'\')">'+(fol[n]?'Following':'Follow')+'</button>';ge('arList').innerHTML=l.map(row).join('')}
 arRender=arPaint;
 openArtist=function(n){go('artist');ge('ttl').textContent=n;arPaint(n);if(online)api('/search?q='+encodeURIComponent(n)+'&limit=40').then(function(d){(d.tracks||[]).forEach(function(x){addT(x)});if(tab==='artist')arPaint(n)}).catch(function(){})};

@@ -33,6 +33,7 @@ Deploy (Render): gunicorn app:app  (see Dockerfile - needs ffmpeg)
 """
 
 import os
+import uuid
 import re
 import random
 import time
@@ -107,7 +108,8 @@ _known_mix_ids = set()
 # (even by a different person) skips that wait entirely. Short TTL because
 # googlevideo URLs themselves expire after a while.
 _mix_url_cache = {}
-MIX_URL_CACHE_TTL = 60 * 4
+_last_play = 0.0
+MIX_URL_CACHE_TTL = 60 * 20
 
 MIX_SEEDS = [
     "afrobeats hits", "bongo flava hits", "gengetone hits",
@@ -343,7 +345,7 @@ def find_cached_native(vid):
     faster than the mp3 path since there's no ffmpeg re-encode pass."""
     safe = re.sub(r"[^a-zA-Z0-9_-]", "", vid)
     for f in os.listdir(CACHE_DIR):
-        if f.startswith(safe + ".") and not f.endswith(".mp3"):
+        if f.startswith(safe + ".") and not f.endswith(".mp3") and not f.endswith(".part"):
             return os.path.join(CACHE_DIR, f)
     return None
 
@@ -590,6 +592,8 @@ def resolve_live_url(vid, allow_long=False):
 
 @app.get("/api/stream/<vid>")
 def stream(vid):
+    global _last_play
+    _last_play = time.time()
     """Cache hit (song played before, by anyone): instant, serves the
     already-downloaded file via /api/proxy.
 
@@ -625,6 +629,8 @@ def stream(vid):
 
 @app.get("/api/relay-and-cache/<vid>")
 def relay_and_cache(vid):
+    global _last_play
+    _last_play = time.time()
     """The hybrid: streams bytes to the listener as they arrive AND writes
     those same bytes to the cache file at the same time. First listener
     gets fast start; the file is fully cached the moment it finishes, so
@@ -644,7 +650,7 @@ def relay_and_cache(vid):
     direct_url, ext = resolved
 
     final_path = cache_path(vid, ext)
-    tmp_path = final_path + ".part"
+    tmp_path = f"{final_path}.{uuid.uuid4().hex[:8]}.part"
 
     try:
         upstream = requests.get(direct_url, stream=True, timeout=30,
@@ -1204,24 +1210,18 @@ import threading as _th, queue as _q
 _warm_q = _q.Queue()
 _warming = set()
 def _warm_one(vid):
+    """Only prepares the playable link (the slow part). The song itself is
+    saved to disk when someone plays it, so warming never downloads or
+    stores songs nobody listens to."""
     ex = find_cached_native(vid)
     if ex and os.path.getsize(ex) > 1000:
         return
-    resolved = resolve_live_url(vid, allow_long=False)
-    if not resolved:
-        return
-    url, ext = resolved
-    final = cache_path(vid, ext)
-    tmp = final + ".part"
-    r = requests.get(url, stream=True, timeout=30, headers={"User-Agent": "Mozilla/5.0"}, proxies=REQUESTS_PROXIES)
-    with open(tmp, "wb") as f:
-        for c in r.iter_content(chunk_size=64 * 1024):
-            if c:
-                f.write(c)
-    os.replace(tmp, final)
+    resolve_live_url(vid, allow_long=False)
 def _warm_loop():
     while True:
         v = _warm_q.get()
+        while time.time() - _last_play < 8:   # a listener just tapped a song: let that finish first
+            time.sleep(1)
         try:
             _warm_one(v)
         except Exception as e:
