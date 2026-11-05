@@ -1,6 +1,6 @@
 flask
 flask-cors
-yt-dlp==2026.8.19
+yt-dlp[default]
 requests
 gunicorn
 mutagen
