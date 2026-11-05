@@ -34,6 +34,7 @@ Deploy (Render): gunicorn app:app  (see Dockerfile - needs ffmpeg)
 
 import os
 import uuid
+import threading
 import re
 import random
 import time
@@ -108,6 +109,7 @@ _known_mix_ids = set()
 # (even by a different person) skips that wait entirely. Short TTL because
 # googlevideo URLs themselves expire after a while.
 _mix_url_cache = {}
+_resolve_lock = threading.Lock()
 _last_play = 0.0
 MIX_URL_CACHE_TTL = 60 * 20
 
@@ -144,6 +146,20 @@ REQUESTS_PROXIES = {"http": PROXY_URL, "https": PROXY_URL} if PROXY_URL else Non
 
 def ydl_opts(**overrides):
     o = dict(YDL_BASE_OPTS)
+    ck = o.get("cookiefile")
+    if ck and os.path.exists(ck):
+        try:
+            import shutil as _sh
+            now = time.time()
+            for f in os.listdir("/tmp"):          # tidy copies older than 10 minutes
+                if f.startswith("ck_") and now - os.path.getmtime("/tmp/" + f) > 600:
+                    try: os.remove("/tmp/" + f)
+                    except OSError: pass
+            tmp = f"/tmp/ck_{uuid.uuid4().hex[:10]}.txt"
+            _sh.copyfile(ck, tmp)
+            o["cookiefile"] = tmp
+        except Exception:
+            pass
     o.update(overrides)
     return o
 
@@ -556,7 +572,7 @@ def mixes():
     return jsonify({"tracks": tracks, "title": title})
 
 
-def resolve_live_url(vid, allow_long=False):
+def resolve_live_url(vid, allow_long=False, wait=True):
     """Get the direct playable URL WITHOUT downloading the file to disk
     first, so playback can start immediately. Cached briefly since
     resolving costs several real seconds (webpage fetch + JS challenge).
@@ -569,7 +585,12 @@ def resolve_live_url(vid, allow_long=False):
     source_url = resolve_source_url(vid)
     if not source_url:
         return None
+    if not _resolve_lock.acquire(blocking=wait):
+        return None                                # background warming never queues behind a listener
     try:
+        cached = _mix_url_cache.get(vid)           # someone may have just resolved it while we waited
+        if cached and cached[1] > time.time():
+            return cached[0]
         with yt_dlp.YoutubeDL(ydl_opts(format="bestaudio/best")) as ydl:
             info = ydl.extract_info(source_url, download=False)
         if not allow_long:
@@ -588,6 +609,8 @@ def resolve_live_url(vid, allow_long=False):
     except Exception as e:
         print(f"!!! resolve_live_url failed for {vid}: {e}")
         return None
+    finally:
+        _resolve_lock.release()
 
 
 @app.get("/api/stream/<vid>")
@@ -1214,7 +1237,7 @@ def _warm_one(vid):
     ex = find_cached_native(vid)
     if ex and os.path.getsize(ex) > 1000:
         return
-    resolve_live_url(vid, allow_long=False)
+    resolve_live_url(vid, allow_long=False, wait=False)
 def _warm_loop():
     while True:
         v = _warm_q.get()
@@ -1232,7 +1255,7 @@ def warm_songs():
     ids = (request.get_json(silent=True) or {}).get("ids", [])
     n = 0
     for v in ids[:6]:
-        if isinstance(v, str) and re.fullmatch(r"[\w-]{11}", v) and v not in _warming and _warm_q.qsize() < 16:
+        if isinstance(v, str) and re.fullmatch(r"[\w-]{11}", v) and v not in _warming and _warm_q.qsize() < 4:
             _warming.add(v)
             _warm_q.put(v)
             n += 1
