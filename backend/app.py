@@ -592,8 +592,6 @@ def resolve_live_url(vid, allow_long=False):
 
 @app.get("/api/stream/<vid>")
 def stream(vid):
-    global _last_play
-    _last_play = time.time()
     """Cache hit (song played before, by anyone): instant, serves the
     already-downloaded file via /api/proxy.
 
