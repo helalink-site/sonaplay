@@ -146,6 +146,7 @@ REQUESTS_PROXIES = {"http": PROXY_URL, "https": PROXY_URL} if PROXY_URL else Non
 
 def ydl_opts(**overrides):
     o = dict(YDL_BASE_OPTS)
+    o.update(overrides)
     ck = o.get("cookiefile")
     if ck and os.path.exists(ck):
         try:
@@ -160,8 +161,20 @@ def ydl_opts(**overrides):
             o["cookiefile"] = tmp
         except Exception:
             pass
-    o.update(overrides)
     return o
+
+
+# Quick lookup first: the android_vr client needs no JavaScript solver (no Node
+# process, far less memory and time) and no cookies. If YouTube refuses it for
+# a video, the normal slower lookup below still runs as the fallback.
+FAST_OPTS = dict(
+    cookiefile=None,
+    js_runtimes={},
+    remote_components=[],
+    extractor_args={"youtube": {"player_client": ["android_vr"]}},
+    socket_timeout=12,
+    retries=1,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -591,8 +604,18 @@ def resolve_live_url(vid, allow_long=False, wait=True):
         cached = _mix_url_cache.get(vid)           # someone may have just resolved it while we waited
         if cached and cached[1] > time.time():
             return cached[0]
-        with yt_dlp.YoutubeDL(ydl_opts(format="bestaudio/best")) as ydl:
-            info = ydl.extract_info(source_url, download=False)
+        info = None
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts(format="bestaudio/best", **FAST_OPTS)) as ydl:
+                info = ydl.extract_info(source_url, download=False)
+            if not info or not info.get("url"):
+                info = None
+        except Exception as e:
+            print(f">>> quick lookup failed for {vid}, using full lookup: {str(e)[:120]}")
+            info = None
+        if info is None:
+            with yt_dlp.YoutubeDL(ydl_opts(format="bestaudio/best")) as ydl:
+                info = ydl.extract_info(source_url, download=False)
         if not allow_long:
             if info.get("is_live") or info.get("was_live"):
                 print(f"!!! resolve_live_url rejected {vid}: live stream")
