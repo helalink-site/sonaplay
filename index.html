@@ -908,7 +908,7 @@ var RING='<svg class="ldr" viewBox="0 0 44 44"><defs><linearGradient id="rgq" x1
 var _r7=render;render=function(){_r7();if(LD){var b=ge('bPP');if(b)b.innerHTML=RING;var m=document.querySelector('.mp');if(m)m.innerHTML=RING}};
 function ldOff(){if(LD){LD=false;render()}}
 au.preload='auto';au.addEventListener('playing',ldOff);au.addEventListener('error',ldOff);au.addEventListener('waiting',function(){if(playing&&!LD){LD=true;render()}});
-function getStream(v){var c=SC[v];if(c&&Date.now()-c.t<1500000)return Promise.resolve(c.u);return fetch(API+'/stream/'+v).then(function(r){return r.json()}).then(function(d){if(!d.url)throw 0;var u=fixU(d.url);SC[v]={u:u,t:Date.now()};return u})}
+function getStream(v){var c=SC[v];if(c&&Date.now()-c.t<1500000)return Promise.resolve(c.u);return fetch(API+'/stream/'+v+(T.some(function(t){return t.vid===v&&t.mix})?'?mix=1':'')).then(function(r){return r.json()}).then(function(d){if(!d.url)throw 0;var u=fixU(d.url);SC[v]={u:u,t:Date.now()};return u})}
 function prefetchNext(){var i=Q.length?Q[0]:-1;if(i<0){var n=T.length,k=cur;do{k=(k+1)%n}while(k===0||!T[k].vid);i=k}if(T[i]&&T[i].vid&&!blobs[T[i].vid])getStream(T[i].vid).catch(function(){})}
 play=function(id){var t=T[id];if(!t||!t.vid)return;window._up=false;recN=0;
 if(tab==='search'&&ge('q').value.trim()){var r=RS().filter(function(x){return x!==ge('q').value.trim()});r.unshift(ge('q').value.trim());try{localStorage.sona_rs=JSON.stringify(r.slice(0,6))}catch(e){}}
@@ -1117,7 +1117,7 @@ cur=id;playing=true;pos=0;cache=0;LD=true;render();go('play');au.pause();clearTi
 if(blobs[t.vid]){startAu(URL.createObjectURL(blobs[t.vid]));return}
 cGet(t.vid).then(function(b){if(cur!==id)return;if(b){startAu(URL.createObjectURL(b));return}
 if(!navigator.onLine){ldOff();toast('You are offline');return}
-if(!t.mix){startAu(API+'/relay-and-cache/'+t.vid);return}
+if(MIX.some(function(m){return m.tid===id}))t.mix=true;if(!t.mix){startAu(API+'/relay-and-cache/'+t.vid);return}
 getStream(t.vid).then(function(u){if(cur===id)startAu(u)}).catch(function(){ldOff();toast('Cannot play this song')})});
 setTimeout(prefetchNext,2500)};
 au.addEventListener('playing',function(){errN=0});
