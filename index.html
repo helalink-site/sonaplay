@@ -627,7 +627,7 @@ document.getElementById('bPrev').innerHTML=I('prev',22);document.getElementById(
 document.getElementById('bLike').innerHTML=I('heart',22);document.getElementById('bEq').innerHTML=I('eq',22);document.getElementById('bSh').innerHTML=I('share',22);document.getElementById('bDots').innerHTML=I('dots',22);document.getElementById('bShuf').innerHTML=I('shuf',20);document.getElementById('bRep').innerHTML=I('rep',20);document.querySelectorAll('.skr button').forEach(function(b,i){b.insertAdjacentHTML('afterbegin',I(['prev','undo','redo','next'][i],18))});
 /* ===== LIVE DATA LAYER ===== */
 var ge=function(i){return document.getElementById(i)};
-var CFG=window.SONA_CONFIG||{},API=CFG.API||'',sb=null,user=null,online=navigator.onLine;
+var CFG=window.SONA_CONFIG||{},API=(function(){try{var a=localStorage.getItem('sp_api');if(a&&/^https:\/\/[^\s'"<>]+\/api$/.test(a))return a}catch(e){}return CFG.API||''})(),sb=null,user=null,online=navigator.onLine;
 try{sb=window.supabase.createClient(CFG.SUPA_URL,CFG.SUPA_ANON_KEY)}catch(e){}
 var au=new Audio(),byV={},blobs={},FY=[],savedFol={},lastBack=0,pT,sT,DB;
 T=[{id:0,t:'Sona Play',a:'',h:265,vid:''}];MIX=[];HOTQ=[];NEWQ=[];TRQ=[];fol={};liked={};dl={};PL=[];N=[];cur=0;playing=false;REG='Kenya';GN=['Afrobeats'];
@@ -722,6 +722,7 @@ function xInstall(){ge('ibn').classList.remove('on');try{localStorage.sona_ibt=D
 addEventListener('online',function(){online=true;loadFeeds();loadMixes()});addEventListener('offline',function(){online=false});
 ge('ibX').innerHTML=I('x',18);
 if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js').catch(function(){});
+if(sb)sb.from('app_config').select('api_url').limit(1).maybeSingle().then(function(r){var u=(r.data&&r.data.api_url)||'';var want=/^https:\/\/[^\s'"<>]+$/.test(u)?u.replace(/\/+$/,'')+'/api':(CFG.API||'');if(want&&want!==API){try{localStorage.setItem('sp_api',want)}catch(e){}location.reload()}},function(){});
 if(sb)sb.from('app_config').select('hero_image_url').limit(1).maybeSingle().then(function(r){var u=r.data&&r.data.hero_image_url;if(/^https:\/\/[^\s'"<>]+$/.test(u||'')){var h=document.querySelector('#hero .hl');if(h)h.src=u}},function(){});
 loadLib();loadLiked();bell();
 if(!online)ge('off').classList.add('on');
