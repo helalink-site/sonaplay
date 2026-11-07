@@ -3,7 +3,6 @@
 set -e
 pkg update -y
 pkg install -y python nodejs ffmpeg cloudflared python-cryptography termux-api
-pip install --upgrade pip
 pip install flask flask-cors "yt-dlp[default]" requests gunicorn mutagen
 pip install pywebpush==2.0.0 || echo "pywebpush skipped (only needed for push notifications)"
 mkdir -p ~/.termux/boot ~/sona-cache

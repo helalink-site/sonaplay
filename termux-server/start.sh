@@ -11,7 +11,7 @@ cd "$HOME/sonaplay/backend" || exit 1
 
 # 1) the server, restarted automatically if it ever stops
 ( while true; do
-    gunicorn app:app --bind 127.0.0.1:$PORT --workers 1 --threads 6 --timeout 120 >> "$HOME/sona-server.log" 2>&1
+    gunicorn app:app --bind 127.0.0.1:$PORT --workers 1 --threads 6 --timeout 120 --access-logfile - >> "$HOME/sona-server.log" 2>&1
     sleep 3
   done ) &
 
