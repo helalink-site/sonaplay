@@ -1175,5 +1175,7 @@ function checkUpdate(){if(!window.SonaNative||!SonaNative.versionCode||!navigato
 fetch('https://api.github.com/repos/helalink-site/sonaplay-native/releases/latest').then(function(r){return r.json()}).then(function(d){var n=parseInt(String(d.tag_name||'').replace('app-',''),10);if(!n||n+100<=cur)return;var a=(d.assets||[]).filter(function(x){return/\.apk$/.test(x.name)})[0];if(a)showUpd(a.browser_download_url,d.tag_name)}).catch(function(){})}
 setTimeout(checkUpdate,8000);
 </script>
+
+<script>setTimeout(function(){var d=document.createElement("div");d.style.cssText="position:fixed;top:0;left:0;right:0;z-index:99999;background:#006;color:#fff;font:11px monospace;padding:4px;word-break:break-all";var a=(typeof API!=="undefined"?API:"API undefined");d.textContent="API="+a+" ls="+(localStorage.getItem("sp_api")||"none");document.documentElement.appendChild(d);fetch(a+"/mixes?limit=1&genre=Gospel").then(function(r){d.textContent+=" | mixes "+r.status;return r.json()}).then(function(j){d.textContent+=" tracks="+(j.tracks||[]).length}).catch(function(e){d.textContent+=" | FETCH ERR "+e})},4000)</script>
 </body>
 </html>
