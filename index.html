@@ -1177,5 +1177,7 @@ setTimeout(checkUpdate,8000);
 </script>
 
 <script>setTimeout(function(){var d=document.createElement("div");d.style.cssText="position:fixed;top:0;left:0;right:0;z-index:99999;background:#006;color:#fff;font:11px monospace;padding:4px;word-break:break-all";var a=(typeof API!=="undefined"?API:"API undefined");d.textContent="API="+a+" ls="+(localStorage.getItem("sp_api")||"none");document.documentElement.appendChild(d);fetch(a+"/mixes?limit=1&genre=Gospel").then(function(r){d.textContent+=" | mixes "+r.status;return r.json()}).then(function(j){d.textContent+=" tracks="+(j.tracks||[]).length}).catch(function(e){d.textContent+=" | FETCH ERR "+e})},4000)</script>
+
+<script>setTimeout(function(){var d=document.createElement("div");d.style.cssText="position:fixed;bottom:80px;left:0;right:0;z-index:99999;background:#050;color:#fff;font:11px monospace;padding:4px;word-break:break-all";document.documentElement.appendChild(d);var a=API;fetch(a+"/health",{mode:"no-cors",cache:"no-store"}).then(function(r){d.textContent+="NOCORS ok "+r.type+" | "}).catch(function(e){d.textContent+="NOCORS FAIL "+e+" | "}).then(function(){return fetch(a+"/health",{cache:"no-store"})}).then(function(r){d.textContent+="CORS ok "+r.status}).catch(function(e){d.textContent+="CORS FAIL "+e})},5000)</script>
 </body>
 </html>
