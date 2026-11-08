@@ -1,0 +1,6 @@
+# Local Netlify folder
+.netlify
+.env
+cache/
+__pycache__/
+.DS_Store

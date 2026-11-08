@@ -1,0 +1,18 @@
+# Optional: for the Supabase CLI (supabase link, then supabase config push). Dashboard users: see README.
+project_id = "sonaplay"
+[auth]
+enabled = true
+site_url = "https://YOUR-SITE.netlify.app"
+additional_redirect_urls = ["https://YOUR-SITE.netlify.app/**", "http://localhost:8888/**"]
+enable_signup = true
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+minimum_password_length = 8
+password_requirements = "lower_upper_letters_digits"
+[auth.email]
+enable_signup = true
+enable_confirmations = true
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_CLIENT_SECRET)"
