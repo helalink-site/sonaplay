@@ -1,4 +1,0 @@
-{ "expo": { "name": "Sona Play", "slug": "sonaplay", "version": "3.0.0", "orientation": "portrait", "scheme": "sonaplay",
-  "userInterfaceStyle": "dark", "icon": "./assets/icon.png", "backgroundColor": "#0A0A0F",
-  "ios": { "bundleIdentifier": "com.sonaplay.app", "infoPlist": { "UIBackgroundModes": ["audio"] } },
-  "android": { "package": "com.sonaplay.app", "permissions": ["FOREGROUND_SERVICE", "WAKE_LOCK"] } } }

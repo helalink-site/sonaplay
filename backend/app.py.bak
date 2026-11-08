@@ -606,7 +606,7 @@ def resolve_live_url(vid, allow_long=False, wait=True):
             return cached[0]
         info = None
         try:
-            with yt_dlp.YoutubeDL(ydl_opts(format="bestaudio[ext=m4a]/bestaudio", **FAST_OPTS)) as ydl:
+            with yt_dlp.YoutubeDL(ydl_opts(format="bestaudio/best", **FAST_OPTS)) as ydl:
                 info = ydl.extract_info(source_url, download=False)
             if not info or not info.get("url"):
                 info = None
@@ -614,7 +614,7 @@ def resolve_live_url(vid, allow_long=False, wait=True):
             print(f">>> quick lookup failed for {vid}, using full lookup: {str(e)[:120]}")
             info = None
         if info is None:
-            with yt_dlp.YoutubeDL(ydl_opts(format="bestaudio[ext=m4a]/bestaudio/best")) as ydl:
+            with yt_dlp.YoutubeDL(ydl_opts(format="bestaudio/best")) as ydl:
                 info = ydl.extract_info(source_url, download=False)
         if not allow_long:
             if info.get("is_live") or info.get("was_live"):

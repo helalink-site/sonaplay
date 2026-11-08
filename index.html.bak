@@ -223,11 +223,6 @@ body.ld #bPP::after{width:32px;height:32px;margin:-16px 0 0 -16px}
 #netMsg .bt button{border-radius:14px;padding:11px 16px;font-weight:600}
 #netMsg .spn{width:30px;height:30px;margin:0 auto 12px;border:3px solid var(--ln);border-top-color:var(--v);border-radius:50%;animation:ldspin .8s linear infinite}
 .sbox select{flex:1;width:100%;background:none;border:0;color:var(--t);font:500 15px Inter;outline:0;min-width:0}.sbox select option{color:#0A0A0F;background:#fff}#rcv{position:fixed;inset:0;z-index:99999;background:var(--bg);display:none;flex-direction:column;justify-content:center;gap:12px;padding:24px}#rcv.on{display:flex}
-.dl{background:none!important}
-.dl::before{content:"";position:absolute;inset:0;border-radius:50%;background:conic-gradient(#6c63ff,#f7627c calc(var(--p,0)*1%),#2a2a42 0)!important;-webkit-mask:radial-gradient(circle,#0000 57%,#000 59%);mask:radial-gradient(circle,#0000 57%,#000 59%)}
-.dl>*{position:relative;z-index:1}
-.dl.done{background:linear-gradient(135deg,#6c63ff,#f7627c)!important;color:#fff}
-.dl.done::before{display:none}
 </style>
 </head>
 <body>

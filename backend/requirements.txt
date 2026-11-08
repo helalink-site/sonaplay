@@ -1,7 +1,0 @@
-flask
-flask-cors
-yt-dlp[default]
-requests
-gunicorn
-mutagen
-pywebpush==2.0.0
