@@ -5,6 +5,8 @@
 set -a; . "$HOME/sona.env"; set +a
 termux-wake-lock 2>/dev/null
 export PORT=5000
+export WARM_DOWNLOAD="${WARM_DOWNLOAD:-1}"
+export CACHE_MAX_MB="${CACHE_MAX_MB:-1500}"
 export CACHE_DIR="${CACHE_DIR:-$HOME/sona-cache}"
 mkdir -p "$CACHE_DIR"
 cd "$HOME/sonaplay/backend" || exit 1

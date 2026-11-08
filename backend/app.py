@@ -674,7 +674,8 @@ def stream(vid):
 @app.get("/api/relay-and-cache/<vid>")
 def relay_and_cache(vid):
     global _last_play
-    _last_play = time.time()
+    if request.headers.get("X-Warm") != "1":
+        _last_play = time.time()
     """The hybrid: streams bytes to the listener as they arrive AND writes
     those same bytes to the cache file at the same time. First listener
     gets fast start; the file is fully cached the moment it finishes, so
@@ -1253,14 +1254,39 @@ def job_check_releases():
 import threading as _th, queue as _q
 _warm_q = _q.Queue()
 _warming = set()
+WARM_DOWNLOAD = os.environ.get("WARM_DOWNLOAD") == "1"
+CACHE_MAX_MB = int(os.environ.get("CACHE_MAX_MB", "1500"))
+def _prune_cache():
+    """Keep the song cache under CACHE_MAX_MB by deleting the oldest files."""
+    try:
+        fs = [os.path.join(CACHE_DIR, f) for f in os.listdir(CACHE_DIR)]
+        fs = [f for f in fs if os.path.isfile(f) and not f.endswith(".part")]
+        tot = sum(os.path.getsize(f) for f in fs)
+        lim = CACHE_MAX_MB * 1024 * 1024
+        for f in sorted(fs, key=os.path.getmtime):
+            if tot <= lim:
+                break
+            tot -= os.path.getsize(f)
+            os.remove(f)
+    except Exception:
+        pass
 def _warm_one(vid):
-    """Only prepares the playable link (the slow part). The song itself is
-    saved to disk when someone plays it, so warming never downloads or
-    stores songs nobody listens to."""
+    """Prepares the playable link. On the phone server (WARM_DOWNLOAD=1) it also
+    saves the song, so the first tap on it starts instantly."""
     ex = find_cached_native(vid)
     if ex and os.path.getsize(ex) > 1000:
         return
-    resolve_live_url(vid, allow_long=False, wait=False)
+    u = resolve_live_url(vid, allow_long=False, wait=False)
+    if u and WARM_DOWNLOAD:
+        try:
+            port = os.environ.get("PORT", "5000")
+            with requests.get(f"http://127.0.0.1:{port}/api/relay-and-cache/{vid}",
+                              headers={"X-Warm": "1"}, stream=True, timeout=(5, 60)) as r:
+                for _ in r.iter_content(65536):
+                    pass
+        except Exception as ex2:
+            print(f"warm download failed {vid}: {ex2}")
+        _prune_cache()
 def _warm_loop():
     while True:
         v = _warm_q.get()
@@ -1278,7 +1304,7 @@ def warm_songs():
     ids = (request.get_json(silent=True) or {}).get("ids", [])
     n = 0
     for v in ids[:6]:
-        if isinstance(v, str) and re.fullmatch(r"[\w-]{11}", v) and v not in _warming and _warm_q.qsize() < 4:
+        if isinstance(v, str) and re.fullmatch(r"[\w-]{11}", v) and v not in _warming and _warm_q.qsize() < (10 if WARM_DOWNLOAD else 4):
             _warming.add(v)
             _warm_q.put(v)
             n += 1

@@ -228,7 +228,7 @@ body.ld #bPP::after{width:32px;height:32px;margin:-16px 0 0 -16px}
 .dl>*{position:relative;z-index:1}
 .dl.done{background:linear-gradient(135deg,#6c63ff,#f7627c)!important;color:#fff}
 .dl.done::before{display:none}
-</style>
+.dd{display:inline-flex;gap:4px;align-items:center;font-size:12px}.dd svg{width:12px;height:12px}</style>
 </head>
 <body>
 <div class="app" id="app">
@@ -1179,6 +1179,41 @@ function showUpd(url,tag){if(localStorage.sona_updseen===tag)return;sure('A new 
 function checkUpdate(){if(!window.SonaNative||!SonaNative.versionCode||!navigator.onLine)return;var cur=SonaNative.versionCode();
 fetch('https://api.github.com/repos/helalink-site/sonaplay-native/releases/latest').then(function(r){return r.json()}).then(function(d){var n=parseInt(String(d.tag_name||'').replace('app-',''),10);if(!n||n+100<=cur)return;var a=(d.assets||[]).filter(function(x){return/\.apk$/.test(x.name)})[0];if(a)showUpd(a.browser_download_url,d.tag_name)}).catch(function(){})}
 setTimeout(checkUpdate,8000);
+
+/* ===== v17: real offline gating, Downloaded marks + delete, offline next song, multi-add ===== */
+function isOff(){return !navigator.onLine||online===false||_net==='off'}
+var ONLY17=['home','mixes','search','expand','artist'];
+var __go17=go;go=function(s,pop){if(isOff()&&ONLY17.indexOf(s)>-1){try{libTab('d')}catch(e){}if(tab!=='dl')__go17('dl',pop);toast('You are offline');return}return __go17(s,pop)};
+setInterval(function(){if(isOff()&&ONLY17.indexOf(tab)>-1){try{libTab('d')}catch(e){}__go17('dl',true);toast('You are offline')}},3000);
+var __stt17=status;status=function(t){var d=dl[t.id]||{};if(d.ph==='done')return '<em class="st dd">'+I('down',12)+(String(t.vid).indexOf('loc')===0?' On this device':' Downloaded')+'</em>';return __stt17(t)};
+function rmDl(id){var t=T[id];if(!t)return;var dev=String(t.vid).indexOf('loc')===0;
+sure(dev?'Remove this song from the app? The file on your phone stays.':'Delete this download?',dev?'Remove':'Delete',function(){
+idb().then(function(db){db.transaction('dl','readwrite').objectStore('dl').delete(t.vid)}).catch(function(){});
+if(window.caches)caches.open(CN).then(function(c){return c.delete(pUrl(t.vid))}).catch(function(){});
+delete blobs[t.vid];delete dl[id];if(cur===id&&playing){au.pause();playing=false}render();toast(dev?'Removed':'Download deleted')})}
+var __oo17=openOpts;openOpts=function(id){__oo17(id);var d=dl[id];if(d&&d.ph==='done'){var b=ge('optB'),x=b.lastElementChild,btn=document.createElement('button');btn.className='orow red';btn.setAttribute('onclick',"optAct('rm')");btn.innerHTML=I('x',22)+(String(T[id].vid).indexOf('loc')===0?'Remove from app':'Delete download');b.insertBefore(btn,x)}};
+var __oa17=optAct;optAct=function(k){if(k==='rm'){closeSheets();rmDl(oid);return}return __oa17(k)};
+var ctxLib=false;
+var __pl17=play;play=function(id){if(tab==='dl')ctxLib=true;else if(tab!=='play')ctxLib=false;return __pl17(id)};
+function offSet(){return T.filter(function(t){return t&&t.vid&&(blobs[t.vid]||(dl[t.id]&&dl[t.id].ph==='done'))})}
+var __st17=step;step=function(d){
+if(!(isOff()||ctxLib))return __st17(d);
+if(d>0&&au.ended&&!Q.length&&(RP===0||RP===2))return __st17(d);
+var s=offSet();if(!s.length)return __st17(d);
+if(d>0&&Q.length){for(var i=0;i<Q.length;i++){var qid=Q[i];if(s.some(function(t){return t.id===qid})){Q.splice(i,1);play(qid);return}}}
+var ix=-1;s.forEach(function(t,k){if(t.id===cur)ix=k});var nx;
+if(SH&&d>0&&s.length>1){do{nx=Math.floor(Math.random()*s.length)}while(nx===ix)}else nx=ix<0?0:(ix+(d>0?1:-1)+s.length)%s.length;
+play(s[nx].id)};
+var addBusy17=false;
+addDeviceSongs=function(files){var list=[].slice.call(files||[]).filter(function(f){return f&&f.size>0&&!/^(image|video|text)\//.test(f.type||'')});
+if(!list.length){toast('No audio files found');return}if(addBusy17){toast('Still adding songs');return}
+addBusy17=true;var ok=0,bad=0,i=0,err='';toast('Adding '+list.length+(list.length>1?' songs':' song')+'...');
+(function next(){if(i>=list.length){addBusy17=false;render();toast(ok+(ok===1?' song added':' songs added')+(bad?', '+bad+' failed'+(err?' ('+err+')':''):''));return}
+var f=list[i++],vid='loc'+Date.now().toString(36)+i,name=(f.name||'').replace(/\.[^.]+$/,'').replace(/[<>]/g,'').slice(0,80);if(!name||/^\d+$/.test(name))name='Song '+i;
+if(f.size>200e6){bad++;err='too big';return next()}
+f.arrayBuffer().then(function(buf){var blob=new Blob([buf],{type:(f.type&&f.type!=='application/octet-stream')?f.type:'audio/mpeg'});
+return idbPut({vid:vid,t:name,a:'This device',img:'',blob:blob,cover:null}).then(function(){var t=addT({videoId:vid,title:name,artist:'This device'});blobs[vid]=blob;dl[t.id]={ph:'done',p:100};ok++;if(ok%4===0)render()})})
+.catch(function(e){bad++;err=String(e&&e.message||e).slice(0,40)}).then(next)})()};
 </script>
 
 
