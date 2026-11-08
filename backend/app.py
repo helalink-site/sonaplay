@@ -1220,7 +1220,7 @@ def job_check_releases():
     if not (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY):
         return jsonify({"error": "not configured"}), 500
     import datetime as _dt
-    follows = _sb("GET", "follows?select=user_id,artist_name&kind=eq.artist&limit=5000").json()
+    follows = [] if request.args.get("only") == "broadcast" else _sb("GET", "follows?select=user_id,artist_name&kind=eq.artist&limit=5000").json()
     muted = {r["user_id"] for r in _sb("GET", "user_prefs?select=user_id&notify_new_songs=eq.false").json()}
     state = {r["artist_name"]: r for r in _sb("GET", "artist_state?select=artist_name,last_seen_video_id,checked_at").json()}
     by = {}
@@ -1317,10 +1317,10 @@ def _feed_build(region, genres, follow):
     yr = _dt.datetime.utcnow().year
     g = genres or ["Afrobeats"]
     jobs = {
-        "hot": [(f"{region} hot songs {yr}", 10)],
-        "new": [(f"{g[0]} {region} new release {yr}", 12), (f"{g[1 % len(g)]} new songs {yr}", 12)],
-        "trending": [(f"{region} trending songs {yr}", 12), (f"{g[0]} trending {yr}", 12)],
-        "foryou": [(f"{x} {region} songs", 10) for x in g[:3]] + [(f, 8) for f in follow[:2]],
+        "hot": [(f"{x} hot songs {region} {yr}", 8) for x in g[:2]] + [(f"{f} latest hit", 6) for f in follow[:2]],
+        "new": [(f"{x} {region} new release {yr}", 10) for x in g[:3]] + [(f"{f} new song {yr}", 6) for f in follow[:2]],
+        "trending": [(f"{x} trending {region} {yr}", 10) for x in g[:3]] + [(f"{region} trending songs {yr}", 6)],
+        "foryou": [(f"{x} {region} songs", 10) for x in g[:3]] + [(f, 8) for f in follow[:4]],
     }
     flat = [(k, q, n) for k, lst in jobs.items() for q, n in lst]
     with _TPE(max_workers=4) as ex:
@@ -1338,7 +1338,7 @@ def _feed_build(region, genres, follow):
 def feed():
     region = (request.args.get("region") or "Kenya")[:40]
     genres = [x.strip()[:30] for x in (request.args.get("genres") or "").split(",") if x.strip()][:3]
-    follow = [x.strip()[:60] for x in (request.args.get("follow") or "").split(",") if x.strip()][:2]
+    follow = [x.strip()[:60] for x in (request.args.get("follow") or "").split(",") if x.strip()][:4]
     key = ("feed", region.lower(), tuple(genres), tuple(follow))
     _FEED_KEYS[key] = _t.time()
     return jsonify(_cached(key, lambda: _feed_build(region, genres, follow), ttl=900))

@@ -17,6 +17,12 @@ cd "$HOME/sonaplay/backend" || exit 1
     sleep 3
   done ) &
 
+# 3) alerts: push admin broadcasts every minute, look for new songs from followed artists every 30 minutes
+( n=0; while true; do
+    sleep 60; n=$((n+1)); Q=""; [ $((n % 30)) -ne 0 ] && Q="?only=broadcast"
+    curl -s -m 110 -X POST "http://127.0.0.1:$PORT/api/jobs/check-releases$Q" -H "X-Cron-Secret: $CRON_SECRET" > /dev/null 2>&1
+  done ) &
+
 # 2) the tunnel; every new address is published to Supabase
 while true; do
   rm -f "$HOME/sona-tunnel.log"

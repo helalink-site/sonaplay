@@ -1,50 +1,7 @@
 [build]
-  publish = "."
-[[redirects]]
-  from = "/backend/*"
-  to = "/404.html"
-  status = 404
-  force = true
-[[redirects]]
-  from = "/termux-server/*"
-  to = "/404.html"
-  status = 404
-  force = true
-[[redirects]]
-  from = "/supabase/*"
-  to = "/404.html"
-  status = 404
-  force = true
-[[redirects]]
-  from = "/native/*"
-  to = "/404.html"
-  status = 404
-  force = true
-[[redirects]]
-  from = "/mobile/*"
-  to = "/404.html"
-  status = 404
-  force = true
-[[redirects]]
-  from = "/.github/*"
-  to = "/404.html"
-  status = 404
-  force = true
-[[redirects]]
-  from = "/README.md"
-  to = "/404.html"
-  status = 404
-  force = true
-[[redirects]]
-  from = "/supabase_dj_setup.sql"
-  to = "/404.html"
-  status = 404
-  force = true
-[[redirects]]
-  from = "/index.html.bak"
-  to = "/404.html"
-  status = 404
-  force = true
+  command = "rm -rf public && mkdir public && cp -r index.html sw.js manifest.json config.js privacy.html terms.html download.html admin.html _headers icons images .well-known public/ && (cp SonaPlay.apk public/ 2>/dev/null || true)"
+  publish = "public"
+
 [[redirects]]
   from = "/privacy"
   to = "/privacy.html"
