@@ -1,0 +1,41 @@
+services:
+  - type: web
+    runtime: static
+    name: sonaplay-web
+    buildCommand: rm -rf public && mkdir public && for f in index.html sw.js manifest.json config.js privacy.html terms.html download.html admin.html SonaPlay.apk icons images .well-known; do [ -e "$f" ] && cp -r "$f" public/; done; true
+    staticPublishPath: public
+    routes:
+      - type: rewrite
+        source: /privacy
+        destination: /privacy.html
+      - type: rewrite
+        source: /terms
+        destination: /terms.html
+      - type: rewrite
+        source: /admin
+        destination: /admin.html
+    headers:
+      - path: /*
+        name: Strict-Transport-Security
+        value: max-age=63072000; includeSubDomains
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: Permissions-Policy
+        value: camera=(), microphone=(), geolocation=()
+      - path: /*
+        name: Content-Security-Policy
+        value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; img-src 'self' data: blob: https:; media-src 'self' blob: data: https:; connect-src 'self' https://sonaplay.local https://*.trycloudflare.com https://api.github.com https://sonaplay.onrender.com https://*.supabase.co wss://*.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+      - path: /sw.js
+        name: Cache-Control
+        value: no-cache
+      - path: /admin.html
+        name: X-Robots-Tag
+        value: noindex, nofollow
