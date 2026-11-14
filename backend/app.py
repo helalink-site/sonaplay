@@ -315,7 +315,7 @@ def _yt_search_raw(query, limit=20, order="relevance", allow_mixes=False):
         return tracks
     except Exception as e:
         import traceback
-        print(f"!!! yt_search FAILED for query={query!r} order={order}: {e}")
+        _errp(f"!!! yt_search FAILED for query={query!r} order={order}: {e}")
         traceback.print_exc()
         return []
 
@@ -438,7 +438,7 @@ def ensure_cached(vid):
             if result:
                 return result
         except Exception as e:
-            print(f"!!! download attempt failed for {vid} with format={fmt!r}: {e}")
+            _errp(f"!!! download attempt failed for {vid} with format={fmt!r}: {e}")
             continue
 
     return None
@@ -618,11 +618,11 @@ def resolve_live_url(vid, allow_long=False, wait=True):
                 info = ydl.extract_info(source_url, download=False)
         if not allow_long:
             if info.get("is_live") or info.get("was_live"):
-                print(f"!!! resolve_live_url rejected {vid}: live stream")
+                _errp(f"!!! resolve_live_url rejected {vid}: live stream")
                 return None
             duration = info.get("duration")
             if duration and duration > MAX_TRACK_SECONDS:
-                print(f"!!! resolve_live_url rejected {vid}: {duration}s too long")
+                _errp(f"!!! resolve_live_url rejected {vid}: {duration}s too long")
                 return None
         url = info.get("url")
         ext = info.get("ext", "m4a")
@@ -630,7 +630,7 @@ def resolve_live_url(vid, allow_long=False, wait=True):
             _mix_url_cache[vid] = ((url, ext), now + MIX_URL_CACHE_TTL)
         return (url, ext) if url else None
     except Exception as e:
-        print(f"!!! resolve_live_url failed for {vid}: {e}")
+        _errp(f"!!! resolve_live_url failed for {vid}: {e}")
         return None
     finally:
         _resolve_lock.release()
@@ -720,7 +720,7 @@ def relay_and_cache(vid):
                 try:
                     os.replace(tmp_path, final_path)  # now cached for next time
                 except Exception as e:
-                    print(f"!!! could not finalize cache for {vid}: {e}")
+                    _errp(f"!!! could not finalize cache for {vid}: {e}")
             else:
                 try:
                     os.remove(tmp_path)  # partial/failed download - don't leave junk
@@ -826,7 +826,7 @@ def tag_audio_file(path, title, artist, thumbnail_url):
                 tags["covr"] = [MP4Cover(cover_bytes, imageformat=MP4Cover.FORMAT_JPEG)]
             tags.save(path)
     except Exception as e:
-        print(f"!!! tagging failed for {path}: {e}")
+        _errp(f"!!! tagging failed for {path}: {e}")
 
 
 @app.get("/api/relay")
@@ -1357,6 +1357,88 @@ def _feed_refresher():
             except Exception as e:
                 print(f"feed refresh failed: {e}")
 _thr.Thread(target=_feed_refresher, daemon=True).start()
+
+# ===== admin server tools (all need an admin login) =====
+import collections, sys, subprocess, signal, base64 as _b64m
+_ERRS = collections.deque(maxlen=60)
+_T0 = time.time()
+def _errp(msg):
+    print(msg)
+    try:
+        _ERRS.append({"t": int(time.time()), "m": str(msg)[:220]})
+    except Exception:
+        pass
+def _cache_files():
+    try:
+        return [os.path.join(CACHE_DIR, f) for f in os.listdir(CACHE_DIR) if os.path.isfile(os.path.join(CACHE_DIR, f))]
+    except Exception:
+        return []
+@app.post("/api/admin/server")
+def admin_server():
+    if not _admin_user(request):
+        return jsonify({"error": "unauthorized"}), 401
+    ck = YDL_BASE_OPTS.get("cookiefile", "")
+    size = os.path.getsize(ck) if ck and os.path.exists(ck) else 0
+    fs = [f for f in _cache_files() if not f.endswith(".part")]
+    return jsonify({
+        "ytdlp": getattr(getattr(yt_dlp, "version", None), "__version__", "?"),
+        "python": sys.version.split()[0], "uptime": int(time.time() - _T0),
+        "cookie_active": size > 0, "cookie_bytes": size,
+        "cache_files": len(fs), "cache_mb": int(sum(os.path.getsize(f) for f in fs) / 1048576),
+        "warm_queue": _warm_q.qsize(),
+        "can_persist_cookies": bool(os.environ.get("RENDER_API_KEY") and os.environ.get("RENDER_SERVICE_ID")),
+        "errors": list(_ERRS)[-30:]})
+@app.post("/api/admin/cookies")
+def admin_cookies():
+    if not _admin_user(request):
+        return jsonify({"error": "unauthorized"}), 401
+    t = str((request.get_json(silent=True) or {}).get("text", "")).replace("\r\n", "\n").strip() + "\n"
+    if not t.startswith("# Netscape") or t.count("youtube.com") < 3 or len(t) > 60000:
+        return jsonify({"error": "That is not a valid cookies.txt export."}), 400
+    path = YDL_BASE_OPTS.get("cookiefile") or "/tmp/cookies.txt"
+    with open(path, "w") as f:
+        f.write(t)
+    YDL_BASE_OPTS["cookiefile"] = path
+    saved = False
+    rk, sid = os.environ.get("RENDER_API_KEY"), os.environ.get("RENDER_SERVICE_ID")
+    if rk and sid:
+        try:
+            r = requests.put(f"https://api.render.com/v1/services/{sid}/env-vars/COOKIE_FILE_B64",
+                             headers={"Authorization": "Bearer " + rk, "Content-Type": "application/json"},
+                             json={"value": _b64m.b64encode(t.encode()).decode()}, timeout=15)
+            saved = r.status_code in (200, 201)
+        except Exception:
+            pass
+    return jsonify({"ok": True, "lines": t.count("youtube.com"), "saved_for_restarts": saved})
+@app.post("/api/admin/clear-cache")
+def admin_clear_cache():
+    if not _admin_user(request):
+        return jsonify({"error": "unauthorized"}), 401
+    n = 0
+    for f in _cache_files():
+        try:
+            os.remove(f)
+            n += 1
+        except OSError:
+            pass
+    _mix_url_cache.clear()
+    return jsonify({"ok": True, "removed": n})
+@app.post("/api/admin/update-ytdlp")
+def admin_update_ytdlp():
+    if not _admin_user(request):
+        return jsonify({"error": "unauthorized"}), 401
+    try:
+        r = subprocess.run([sys.executable, "-m", "pip", "install", "-U", "yt-dlp[default]"], capture_output=True, text=True, timeout=240)
+        return jsonify({"ok": r.returncode == 0, "out": (r.stdout + r.stderr)[-300:]})
+    except Exception as e:
+        return jsonify({"ok": False, "out": str(e)[:300]})
+@app.post("/api/admin/restart")
+def admin_restart():
+    if not _admin_user(request):
+        return jsonify({"error": "unauthorized"}), 401
+    threading.Timer(1.0, lambda: os.kill(os.getppid(), signal.SIGHUP)).start()
+    return jsonify({"ok": True})
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=os.environ.get("FLASK_DEBUG") == "1", threaded=True)
